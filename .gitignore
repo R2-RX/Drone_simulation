@@ -1,0 +1,10 @@
+# Ignore executables
+
+# Ignore files
+Artificial_Potential_Fields_(APF).png
+
+# Ignore IDE/editor files
+.vscode/
+
+# Ignore build folders
+/build/
