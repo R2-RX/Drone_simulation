@@ -7,7 +7,7 @@ This project is an interactive drone simulation that operates in a terminal-base
 
 A controllable drone navigating in a bounded area, Randomly appearing obstacles and targets, Repulsion forces following Khatib's model.
 
-It can be used for **path-planning** of drones with respect to avoidable regions.
+It can be used for **simple path-planning** of drones with respect to avoidable regions.
 
 ![image info](images/snap_shot.png)
 
@@ -175,7 +175,7 @@ make -j
 **To execute the project, perform the following steps:**
 
 ```bash
-cd build/processes
+cd processes
 ./Master_Proc 
 ```
 ---
