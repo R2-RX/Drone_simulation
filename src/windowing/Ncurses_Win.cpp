@@ -12,7 +12,6 @@ Ncurses_Win::Ncurses_Win()
     nodelay(stdscr, TRUE);
 
     updateDimensions();
-
     win = newwin(wh, ww, wy, wx);
     if (!win) {
         endwin();

@@ -1,42 +1,42 @@
 #ifndef PIPE_H
 #define PIPE_H
-// =============================================== support trivial types, remember  if you want to pipe other data  ===============================
-//                                                          types you need serialization and deserialization
-//                                                                like : LV [length][characters...]
-//                                                       [length][element1][element2][element3][element4][element5]
-
-//                                                               TLV  [type][length][value]
-//                                                       example:       [type = 0x02]          ← tells receiver this is a vector<int>
-//                                                                      [length = 5]           ← count of elements
-//                                                                      [10][20][30][40][50]   ← 5 integers               
 
 #include "Communication.h"
 #include <string>
 #include <mutex>
 #include <stdexcept>
-#include <unistd.h>    // For access(), unlink(), read(), write(), close()
-#include <fcntl.h>     // For open()
-#include <sys/stat.h>  // For mkfifo
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 #include <type_traits>
+#include <optional>
 #include <iostream>
 
 template<typename Generic_type>
 class Pipe : public Communication<Generic_type> {
-    static_assert(std::is_trivially_copyable<Generic_type>::value, 
+    static_assert(std::is_trivially_copyable<Generic_type>::value,
                   "Pipe only supports trivially copyable types (int, double, char, etc.)");
 
 private:
     std::string pipe_name;
     int fd = -1;
     std::mutex pipe_mutex;
+    std::optional<Generic_type> buffer; // safely store received data
 
 public:
     explicit Pipe(const std::string& name, int IO_type = O_RDWR | O_NONBLOCK);
     ~Pipe();
 
+    Pipe(const Pipe&) = delete;             // disable copy
+    Pipe& operator=(const Pipe&) = delete;  // disable copy
+    Pipe(Pipe&& other) noexcept;            // enable move
+    Pipe& operator=(Pipe&& other) noexcept; // enable move
+
     bool send_data(const Generic_type& data) override;
     Generic_type* receive_data() override;
     void clean_up() override;
+    int get_fd() const { return fd; }
+    std::string get_name() const { return pipe_name; }
 };
 
 // Constructor: create/open named pipe
@@ -44,7 +44,6 @@ template<typename Generic_type>
 Pipe<Generic_type>::Pipe(const std::string& name, int IO_type)
     : Communication<Generic_type>(nullptr), pipe_name(name) {
 
-    // Create the FIFO if it doesn't exist
     if (access(pipe_name.c_str(), F_OK) == -1) {
         if (mkfifo(pipe_name.c_str(), 0666) == -1) {
             throw std::runtime_error("mkfifo failed for: " + pipe_name);
@@ -57,11 +56,29 @@ Pipe<Generic_type>::Pipe(const std::string& name, int IO_type)
     }
 }
 
-// Destructor: close pipe and free memory
+// Destructor: close pipe
 template<typename Generic_type>
 Pipe<Generic_type>::~Pipe() {
     if (fd != -1) close(fd);
-    delete this->generic_data;
+}
+
+// Move constructor
+template<typename Generic_type>
+Pipe<Generic_type>::Pipe(Pipe&& other) noexcept
+    : pipe_name(std::move(other.pipe_name)), fd(other.fd) {
+    other.fd = -1;
+}
+
+// Move assignment
+template<typename Generic_type>
+Pipe<Generic_type>& Pipe<Generic_type>::operator=(Pipe&& other) noexcept {
+    if (this != &other) {
+        if (fd != -1) close(fd);
+        pipe_name = std::move(other.pipe_name);
+        fd = other.fd;
+        other.fd = -1;
+    }
+    return *this;
 }
 
 // Send data through the pipe
@@ -80,17 +97,14 @@ Generic_type* Pipe<Generic_type>::receive_data() {
     std::lock_guard<std::mutex> lock(pipe_mutex);
     if (fd == -1) return nullptr;
 
-    if (!this->generic_data)
-        this->generic_data = new Generic_type();
-
-    ssize_t bytes = read(fd, this->generic_data, sizeof(Generic_type));
-    if (bytes == sizeof(Generic_type))
-        return this->generic_data;
-    else 
-        return nullptr;
-        throw std::runtime_error("Failed to receive: " + pipe_name);
+    Generic_type tmp;
+    ssize_t bytes = read(fd, &tmp, sizeof(Generic_type));
+    if (bytes == sizeof(Generic_type)) {
+        buffer = tmp;
+        return &(*buffer);
+    }
+    return nullptr;
 }
-
 
 // Clean up the pipe (unlink the FIFO file)
 template<typename Generic_type>

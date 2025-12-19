@@ -2,104 +2,210 @@
 #include "DroneLogic.h"
 #include "TargetLogic.h"
 #include "ObstacleLogic.h"
+#include "Logger.h"
+#include "Pipe.h"
+#include "config.h"
 
 #include <cstdlib>
 #include <vector>
-#include <iostream>
-#include <algorithm>
 #include <thread>
 #include <chrono>
+#include <unistd.h>
+#include <algorithm>
+#include <atomic>
+#include <iostream>
+#include <signal.h>
 
-int main() {
-    BlackBoard blackboard;
+// -----------Global shared state (atomic)---------------
+static std::atomic<bool>     shutdownFlage{false};
+static std::atomic<long>     spawn_counter{0};
+static std::atomic<int64_t>  last_spawn_time{0};
 
-    auto [width, height] = blackboard.getPlayAreaSize();
-    blackboard.setSpawnPermission(true);
+// ------------Global singletons----------------
+Logger logger(SYSTEM_WIDE_LOG);
+BlackBoard blackboard;
+
+
+// ------------Signal handler----------------
+void handle_sigterm(int)
+{
+    shutdownFlage.store(true, std::memory_order_relaxed);
+}
+
+int main()
+{
+    signal(SIGTERM, handle_sigterm); // from watchdog
+
+    blackboard.setProcessPid(
+        WatchDogProcName::ItemSpawner_Proc,
+        getpid()
+    );
+
+    // ------------Create heartbeat pipe----------------
+    Pipe<char> itemspawner_pipe_wd(ITEMSPAWNER_PIPE_WD);
+
+    
+    // ----------Heartbeat thread (detached)------------
+    std::thread heartbeat(
+        [&]()
+        {
+            last_spawn_time.store(
+                blackboard.getGlobalTime(),
+                std::memory_order_relaxed
+            );
+            const int64_t SPAWN_TIMEOUT_NS = static_cast<int64_t>(SPAWN_TIME_INTERVAL +1) * 1'000'000'000LL; // give the thread two times to try (SPAWN_TIME_INTERVAL +1)
+            while (!shutdownFlage.load(std::memory_order_relaxed))
+            {
+                // Send alive signal
+                itemspawner_pipe_wd.send_data('S');
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+                int64_t now  = blackboard.getGlobalTime();
+                int64_t last = last_spawn_time.load(std::memory_order_relaxed);
+                int64_t diff = now - last;
+
+                if (diff > static_cast<int64_t>(SPAWN_TIMEOUT_NS))
+                {
+                    logger.log(
+                        "Spawner not responding! its Heartbeat stopped.",
+                        getpid(),
+                        Logger::LogLevel::WARNING
+                    );
+                    break; // watchdog will react
+                }
+            }
+
+            logger.log(
+                "Heartbeat thread exiting.",
+                getpid(),
+                Logger::LogLevel::INFO
+            );
+        }
+    );
+
+    heartbeat.detach();
 
     // ----------------------------
-    // Spawn drones
+    // Logic object 
     // ----------------------------
-    const int number_of_drones = 1;
     std::vector<ItemLogic*> drone_logics;
-    for (int d = 0; d < number_of_drones; ++d) {
-        ItemData drone_data;
-        drone_data.type = ItemData::ItemType::Drone;
-        drone_data.Pos_x = 0; //width / 2.0;
-        drone_data.Pos_y = 0; //height / 2.0;
-        drone_data.mass = 10.0;
-        drone_data.visc_damp_coef = 1;
-        drone_data.active = true;
+    std::vector<ItemLogic*> target_logics;
+    std::vector<ItemLogic*> obstacle_logics;
 
-        int item_index = blackboard.addItem_protected(drone_data);
-        ItemData* shared_data_ptr = blackboard.getItem(item_index);
-
-        ItemLogic* drone_logic = blackboard.addLogicObject<DroneLogic>(shared_data_ptr);
-        drone_logics.push_back(drone_logic);
-    }
+    bool drones_initialized = false;
 
     // ----------------------------
-    // Main loop
+    // Main spawn loop
     // ----------------------------
-    while (true) {
-        if (blackboard.getSpawnPermission()) {
-            // Seed RNG with global time
-            std::srand(static_cast<unsigned int>(blackboard.getGlobalTime()));
+    while (true)
+    {
+        if (blackboard.getSpawnStatus())
+        {
+            blackboard.waitSpawnPermission();
 
             auto [width, height] = blackboard.getPlayAreaSize();
             int screen_min = std::min(width, height);
 
             int number_of_obstacles = screen_min / 2;
-            int number_of_targets = screen_min / 2;
-            blackboard.setSpawnRequestsNum(number_of_obstacles, number_of_targets);
+            int number_of_targets   = screen_min / 2;
+            int number_of_drones    = 1;
+
+            blackboard.setSpawnRequestsNum(
+                number_of_obstacles,
+                number_of_targets
+            );
+
+            // ----------------------------
+            // Spawn drones (once)
+            // ----------------------------
+            if (!drones_initialized)
+            {
+                for (int d = 0; d < number_of_drones; ++d)
+                {
+                    ItemData data{};
+                    data.type = ItemData::ItemType::Drone;
+                    data.Pos_x = 0.1;
+                    data.Pos_y = 0.1;
+                    data.mass = 10.0;
+                    data.visc_damp_coef = 1;
+                    data.active = true;
+
+                    blackboard.addItem_protected(data);
+                }
+                drones_initialized = true;
+            }
 
             // ----------------------------
             // Spawn targets
             // ----------------------------
-            std::vector<ItemLogic*> target_logics;
-            for (int i = 0; i < number_of_targets; ++i) {
-                ItemData target_data;
-                target_data.type = ItemData::ItemType::Target;
-                target_data.Pos_x = static_cast<double>(std::rand() % width);
-                target_data.Pos_y = static_cast<double>(std::rand() % height);
-                target_data.mass = 500.0;
-                target_data.visc_damp_coef = 1000;
-                target_data.attr_coef = 2.0;
-                target_data.active = true;
+            std::srand(
+                static_cast<unsigned int>(blackboard.getGlobalTime())
+            );
 
-                int item_index = blackboard.addItem_protected(target_data);
-                ItemData* shared_data_ptr = blackboard.getItem(item_index);
+            for (int i = 0; i < number_of_targets; ++i)
+            {
+                ItemData data{};
+                data.type = ItemData::ItemType::Target;
+                data.Pos_x = std::rand() % width;
+                data.Pos_y = std::rand() % height;
+                data.mass = 500.0;
+                data.visc_damp_coef = 1000;
+                data.attr_coef = 20.0;
+                data.active = true;
 
-                ItemLogic* target_logic = blackboard.addLogicObject<TargetLogic>(shared_data_ptr);
-                target_logics.push_back(target_logic);
-
+                blackboard.addItem_protected(data);
             }
 
             // ----------------------------
             // Spawn obstacles
             // ----------------------------
-            std::vector<ItemLogic*> obstacle_logics;
-            for (int j = 0; j < number_of_obstacles; ++j) {
-                ItemData obstacle_data;
-                obstacle_data.type = ItemData::ItemType::Obstacle;
-                obstacle_data.Pos_x = static_cast<double>(std::rand() % width);
-                obstacle_data.Pos_y = static_cast<double>(std::rand() % height);
-                obstacle_data.mass = 500.0;
-                obstacle_data.visc_damp_coef = 1000;
-                obstacle_data.repl_coef = 3.0;
-                obstacle_data.active = true;
+            for (int i = 0; i < number_of_obstacles; ++i)
+            {
+                ItemData data{};
+                data.type = ItemData::ItemType::Obstacle;
+                data.Pos_x = std::rand() % width;
+                data.Pos_y = std::rand() % height;
+                data.mass = 500.0;
+                data.visc_damp_coef = 1000;
+                data.repl_coef = 30.0;
+                data.active = true;
 
-                int item_index = blackboard.addItem_protected(obstacle_data);
-                ItemData* shared_data_ptr = blackboard.getItem(item_index);
-
-                ItemLogic* obstacle_logic = blackboard.addLogicObject<ObstacleLogic>(shared_data_ptr);
-                obstacle_logics.push_back(obstacle_logic);
+                blackboard.addItem_protected(data);
             }
 
-            // Reset spawn permission
-            blackboard.setSpawnPermission(false);
+            logger.log(
+                std::to_string(
+                    spawn_counter.fetch_add(1, std::memory_order_relaxed)
+                ) + ": Items spawned!",
+                blackboard.getProcessPid(
+                    WatchDogProcName::ItemSpawner_Proc
+                ),
+                Logger::LogLevel::INFO
+            );
+
+            // ----------------------------
+            // Update heartbeat timestamp
+            // ----------------------------
+            last_spawn_time.store(
+                blackboard.getGlobalTime(),
+                std::memory_order_relaxed
+            );
+
+            blackboard.setSpawnStatus(false);
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+        if (shutdownFlage.load(std::memory_order_relaxed))
+        {
+            logger.log(
+                "Received SIGTERM, shutting down...",
+                getpid(),
+                Logger::LogLevel::WARNING
+            );
+            break;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+
     return 0;
 }
-

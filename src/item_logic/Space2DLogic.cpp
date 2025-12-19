@@ -19,11 +19,11 @@ void Space2D::Wall_Reflect(PhysicsBody* obj) {
 
     // Reflect X axis
     if (x <= 0.0) { x = -x; vx = -vx; }
-    else if (x >= width_) { x = 2*width_ - x; vx = -vx; }
+    else if (x > width_) { x = 2*width_ - x; vx = -vx; }
 
     // Reflect Y axis
     if (y <= 0.0) { y = -y; vy = -vy; }
-    else if (y >= height_) { y = 2*height_ - y; vy = -vy; }
+    else if (y > height_) { y = 2*height_ - y; vy = -vy; }
 
     // Update back
     obj->setPosition(x, y);

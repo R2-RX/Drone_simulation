@@ -8,11 +8,22 @@ BlackBoard::BlackBoard(const std::string& shm_name)
 
     for (int i = 0; i < MAX_LOGIC_OBJECTS; ++i)
         freeLogicSlots.push_back(i);
+
+    // Initialize named semaphore for spawn control
+    spawnSemaphore = sem_open("/spawn_semaphore", O_CREAT, 0666, 0); // initial value 0
+    if (spawnSemaphore == SEM_FAILED) {
+        throw std::runtime_error("Failed to open spawn semaphore: " + std::string(strerror(errno)));
+    }
 }
 
 BlackBoard::~BlackBoard() {
     for (int i = 0; i < MAX_LOGIC_OBJECTS; ++i)
         delete logicPool[i];
+    
+    if (spawnSemaphore) {
+        sem_close(spawnSemaphore);   // close handle
+        sem_unlink("/spawn_semaphore"); // remove from system
+    }
 
     shm_data.clean_up();
 }
@@ -58,7 +69,7 @@ int BlackBoard::addItem_protected(ItemData& item) {
 
     shm_data.with_lock([&](BlackBoardShared* data) {
         for (int i = 0; i < MAX_ITEMS; ++i) {
-            if (!data->items[i].active) {
+            if (!data->items[i].active) {  // check the first empty or inactivate slot
                 data->items[i] = item;
                 data->items[i].active = true;
                 slot = i;
@@ -107,6 +118,10 @@ void BlackBoard::rescalePositions(int current_width_, int current_height_, int r
         if (initialPositions.find(phys_obj) == initialPositions.end()) {
             initialPositions[phys_obj] = phys_obj->getPosition();
         }
+        if (obj->get_data_ptr()->type == ItemData::ItemType::Drone) {
+            Logger log ("DDD.txt");
+            log.log (std::to_string(obj->get_data_ptr()->Pos_x) + "," + std::to_string(obj->get_data_ptr()->Pos_y),123, Logger::LogLevel::WARNING);
+        }
 
         // Scaling
         auto [initX, initY] = initialPositions[phys_obj];
@@ -123,6 +138,7 @@ void BlackBoard::updateDroneStats(double dt) {
 
             // Update timestamp
             item.timeStamp += dt;
+            data->g_timeStamp = item.timeStamp;
 
             item.score = roundTo(
               item.number_of_hit_targets * 30.0
@@ -133,7 +149,6 @@ void BlackBoard::updateDroneStats(double dt) {
         }
     });
 }
-
 
 void BlackBoard::setSpawnRequestsNum(int obstacles, int targets) {
     shm_data.with_lock([&](BlackBoardShared* data) {
@@ -180,30 +195,61 @@ std::pair<int,int> BlackBoard::getPlayAreaSize() {
     return size;
 }
 
-bool BlackBoard::getSpawnPermission() {
-    bool val = false;
+// wait for spawn permission
+void BlackBoard::waitSpawnPermission() {
+    if (spawnSemaphore) {
+        if (sem_wait(spawnSemaphore) == -1) {
+            perror("sem_wait failed");
+        }
+    }
+}
+
+// signal permission granted
+void BlackBoard::signalSpawnPermission() {
+    if (spawnSemaphore) {
+        if (sem_post(spawnSemaphore) == -1) {
+            perror("sem_post failed");
+        }
+    }
+}
+
+
+pid_t BlackBoard::getProcessPid(int index) {
+    pid_t P = -1;
     shm_data.with_lock([&](BlackBoardShared* data) {
-        val = data->Spawn_permission;
+        if (index >= 0 && index < NUM_PROCESSES) {
+            P = data->process_pid[index];
+        }
+    });
+    return P;
+}
+
+void BlackBoard::setProcessPid(int index, pid_t P) {
+    shm_data.with_lock([&](BlackBoardShared* data) {
+        if(index >= 0 && index < NUM_PROCESSES) {
+            data->process_pid[index] = P; 
+        }
+    });
+}
+
+bool BlackBoard::getSpawnStatus() {
+    bool val = true;
+    shm_data.with_lock([&](BlackBoardShared* data) {
+        val = data->Spawn_Status;
     });
     return val;
 }
 
-void BlackBoard::setSpawnPermission(bool permission) {
+void BlackBoard::setSpawnStatus(bool Status) {
     shm_data.with_lock([&](BlackBoardShared* data) {
-        data->Spawn_permission = permission;
+        data->Spawn_Status = Status;
     });
 }
 
-Pair_ BlackBoard::getKeyboardEvent() {
-    Pair_ out;
+double BlackBoard::getTimeStamp() {
+    double T = 0;
     shm_data.with_lock([&](BlackBoardShared* data) {
-        out = data->Force_input;
+        T = data->g_timeStamp;
     });
-    return out;
-}
-
-void BlackBoard::setKeyboardEvent(const Pair_& input_) {
-    shm_data.with_lock([&](BlackBoardShared* data) {
-        data->Force_input = input_;
-    });
+    return T;
 }

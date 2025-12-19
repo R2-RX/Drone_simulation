@@ -7,13 +7,38 @@
 #include <stdexcept>
 #include <cstdint>
 #include <unordered_map>
+#include <iostream>
+#include <chrono>
+#include <signal.h>
+#include <time.h>
+#include <unistd.h>
+#include "BlackBoard.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/timerfd.h>
+#include <sys/select.h>
+#include <sys/types.h>
+#include <stdint.h>
+#include <errno.h>
+#include <semaphore.h>
+#include <cmath>
 
+#include "config.h"
 #include "SharedMemoryData.h"
 #include "ItemLogic.h"
 #include "PhysicsBody.h"
+#include "Logger.h"
 
-#define MAX_ITEMS 2048
-#define MAX_LOGIC_OBJECTS 2048
+enum WatchDogProcName { 
+    GlobalTimer_Proc,  
+    Keyboard_Proc, 
+    GameLoop_Proc, 
+    ItemSpawner_Proc,
+    Master_Proc,
+    WatchDog_Proc,
+    WD_Count }; 
 
 //keyboard input
 struct Pair_{double x ,y;};
@@ -21,26 +46,29 @@ struct Pair_{double x ,y;};
 // POD shared memory layout
 struct BlackBoardShared {
     ItemData items[MAX_ITEMS];
+    pid_t process_pid[NUM_PROCESSES];
 
     int obstacle_spawn_request_num = 0;
     int target_spawn_request_num = 0;
     int drone_spawn_request_num = 0;
 
-    bool Spawn_permission = false;
-    
-    Pair_ Force_input = {0.0, 0.0};
+    bool Spawn_Status = true;
 
     int64_t simulationGlobalTime = 0;
 
     int Width_play_area = 0;
     int Height_play_area = 0;
+    
+    std::pair<double,double> ref_positions;
 
-    std::vector<std::pair<double,double>> ref_positions;
+    double g_timeStamp;
 };
 
 class BlackBoard {
 private:
     SharedMemoryData<BlackBoardShared> shm_data;
+
+    sem_t* spawnSemaphore = nullptr;
 
     // Logic Pool
     std::array<ItemLogic*, MAX_LOGIC_OBJECTS> logicPool{}; //pointer to ItemLogic which holds address of object data in shared memory
@@ -55,6 +83,8 @@ public:
     ~BlackBoard();
 
      ItemData* current_target = nullptr;
+
+    void clean_up () { shm_data.clean_up();}
      
     // -------- Logic Management --------
     template<typename LogicType>
@@ -69,7 +99,7 @@ public:
 
         // Assign identity for safe removal
         logic->bb_index = index;
-        logic->bb_generation = ++logicGenerations[index]; //  
+        logic->bb_generation = ++logicGenerations[index];  
 
         logicPool[index] = logic;
         return logic;  // Return derived class pointer directly
@@ -99,11 +129,16 @@ public:
     void setPlayAreaSize(int width, int height);
     std::pair<int,int> getPlayAreaSize();
 
-    bool getSpawnPermission();
-    void setSpawnPermission(bool permission);
+    void waitSpawnPermission();
+    void signalSpawnPermission();
 
-    Pair_ getKeyboardEvent();
-    void setKeyboardEvent(const Pair_& input_);
+    pid_t getProcessPid(int index);
+    void setProcessPid(int index, pid_t P);
+
+    bool getSpawnStatus();
+    void setSpawnStatus(bool permission);
+    
+    double getTimeStamp();
 
 };
 

@@ -1,4 +1,3 @@
-
 #include <locale.h>
 #include <ncurses.h>
 #include <iostream>
@@ -7,6 +6,70 @@
 #include "Keyboard.h"
 #include "Pipe.h"
 #include <cstring>
+#include "BlackBoard.h"
+#include "Logger.h"
+
+Logger logger(SYSTEM_WIDE_LOG);
+static bool shutdownFlage = false;
+
+void draw_tail_output(WINDOW* win);
+void print_center(WINDOW* win, int row, const char* str);
+void draw_keys(WINDOW* win);
+void handle_sigterm(int signum) {shutdownFlage = true;}
+
+int main() {
+    signal(SIGTERM, handle_sigterm); // from watchdog
+
+    setlocale(LC_ALL, "");
+
+    Ncurses_Win app;
+    Keyboard Key_Command;
+    BlackBoard blackboard;
+
+    WINDOW* win = app.getWindow();
+    int ch;
+
+    draw_keys(win);
+
+    blackboard.setProcessPid(WatchDogProcName::Keyboard_Proc, getppid());
+
+    while (true) {
+
+        //------ send a msg to watch dog ----- 
+        Pipe<char> keyboard_pipe_wd(KEYBOARD_PIPE_WD);
+        keyboard_pipe_wd.send_data('K');
+        //-----------------------------------
+
+        ch = getch();         // Non-blocking
+
+        if (ch == 27){
+            keyboard_pipe_wd.send_data('Q');  // send quit signal
+            break;  // ESC to exit
+        } 
+        if (shutdownFlage) {
+            logger.log("Received SIGTERM, shutting down...", getpid(),Logger::LogLevel::WARNING);
+            break; 
+        }
+
+        if (ch != ERR) {
+            Key_Command.update(ch);
+        }
+
+        draw_tail_output(win);  // Always update tail
+        draw_keys(win);         // Keep static keys on screen
+
+        // Handle resize
+        if (ch == KEY_RESIZE) {
+            app.resize();
+            draw_keys(win);
+        }
+
+        napms(10); // Small delay to reduce CPU usage
+    }
+
+    return 0;
+
+}
 
 void draw_tail_output(WINDOW* win) {
 
@@ -46,41 +109,4 @@ void draw_keys(WINDOW* win) {
     print_center(win, 10, "    ←   →");
     print_center(win, 11, "   ↓ ");
     wrefresh(win);
-}
-
-
-int main() {
-    setlocale(LC_ALL, "");
-
-    Ncurses_Win app;
-    Keyboard Key_Command;
-
-    WINDOW* win = app.getWindow();
-    int ch;
-
-    draw_keys(win);
-
-    while (true) {
-        ch = getch();         // Non-blocking
-
-        if (ch == 27) break;  // ESC to exit
-
-        if (ch != ERR) {
-            Key_Command.update(ch);
-        }
-
-        draw_tail_output(win);  // Always update tail
-        draw_keys(win);         // Keep static keys on screen
-
-        // Handle resize
-        if (ch == KEY_RESIZE) {
-            app.resize();
-            draw_keys(win);
-        }
-
-        napms(10); // Small delay to reduce CPU usage
-    }
-
-    return 0;
-
 }

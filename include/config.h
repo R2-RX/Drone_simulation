@@ -12,43 +12,44 @@
     #define PLATFORM_MACOS
 #endif
 
+// Shared memory
 #define SHM_NAME "/blackboard_shm"
 
-#define PIPE_BLACKBOARD "/tmp/blackboard_pipe"
+// Semaphore
+#define SPAWN_SEM_NAME "/spawn_semaphore"
 
+// Number of processes
+#define NUM_PROCESSES 6
+
+// Data pipe line
 #define KEYBOARD_Data_PIPE  "/tmp/keyboard_data_pipe"
-#define PIPE_WINDOW     "/tmp/window_pipe"
-#define PIPE_OBSTACLE   "/tmp/obstacle_pipe"
-#define PIPE_TARGET     "/tmp/target_pipe"
-#define PIPE_BLACKBOARD "/tmp/blackboard_pipe"
-#define PIPE_DYNAMICS   "/tmp/dynamics_pipe"
 
-// HYPERPARAMETERS
+// Number of Game components
+#define MAX_ITEMS 2048  //Blackboard
+#define MAX_LOGIC_OBJECTS MAX_ITEMS // Same limit as items
 
+// Should check the  data type of socket input and see wheather its in meter or in pixel
 #define Scaleing_pixel_to_meter 0.3125
-// you should check the  data type of socket input and see wheather its in meter or in pixel
 
+#define UPS  30         // Update per-second (dt = 1/UPS)
+#define TARGET_OBSTACLE_GENERATION_DELAY  6 // generate every 6 seconds
 
-#define RENDER_DELAY 100000 // microseconds
-#define RETRY_DELAY 50000   // for opening pipes
-#define MAX_RETRIES 20      // for opening pipes
-#define TIMEOUT_SECONDS 10  // for watchdog
+// watch dog Pipe lines 
+#define GLOBALTIMER_PIPE_WD     "/tmp/globaltimer_pipe_wd"
+#define GAMELOOP_PIPE_WD        "/tmp/gameloop_pipe_wd"
+#define MASTER_PIPE_WD          "/tmp/master_pipe_wd"
+#define KEYBOARD_PIPE_WD        "/tmp/keyboard_pipe_wd"
+#define ITEMSPAWNER_PIPE_WD     "/tmp/itemspawner_pipe_wd"
 
+#define WATCHDOG_Timer_DELAY   50  // 2000 ms between heartbeat checks // just check the spawner counter if you want to be accurate
+#define MAX_PIPE_RETRIES 100  // (MAX_RETRIES*10ms)/1000 sec for opening pipes
+#define WATCHDOG_TIMEOUT_SECONDS 3// 5 seconds before declaring timeout
 
-#define DT  0.001           // time step
-#define MAX_OBJECTS 100     // max number of obstacles and targets
-#define BLACKBOARD_CHECK_DELAY      1  // update blackboard every 1 second
-#define OBSTACLE_GENERATION_DELAY   4  // generate obstacles every 4 seconds
-#define TARGET_GENERATION_DELAY     6 // generate targets every 6 seconds
-#define WATCHDOG_Timer_DELAY    2  // check heartbeat every 1 second
+#define SPAWN_TIME_INTERVAL 20 // 20 seconds
 
+// File
 #define LIVE_MONITORING  "live_monitoring.txt"
-
-// Debug settings
-// #define ENABLE_LOGGING     1
-// #define DEBUG_LEVEL        2   // 1: Low, 2: Medium, 3: High
-
-// // Other global settings
-// #define TIMEOUT_DURATION   5000  // Timeout in milliseconds
+#define SYSTEM_WIDE_LOG  "system_wide.log"
+//#define Save_GAME_DATA  "game_data.dat"
 
 #endif // CONFIG_H

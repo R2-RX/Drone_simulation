@@ -2,25 +2,28 @@
 #define LOGGER_H
 
 #include <iostream>
+#include <fstream>
 #include <string>
-#include <sstream>
 #include <ctime>
-#include <iomanip>
+#include <stdexcept>
+#include <unistd.h> // for pid_t
+#include <mutex>
 
 class Logger {
 public:
     enum class LogLevel { LOG, INFO, WARNING, ERROR };
 
-private:
-    LogLevel level = LogLevel::LOG;
+    // Constructor: provide log file name
+    Logger(const std::string& filename);
 
-public:
-    void setLevel(LogLevel lv) { level = lv; }
-
-    void log(const std::string& msg, pid_t pid_, LogLevel lv = LogLevel::LOG);
+    // Log a message with PID and level
+    void log(const std::string& msg, pid_t pid_, LogLevel lv = LogLevel::LOG, bool Console_output_ = true);
 
 private:
-    // Helper function to get current time as string
+    std::ofstream logFile;
+    std::mutex logMutex; // protect writes
+
+    // Helper to get current timestamp
     std::string getCurrentTime() const;
 };
 
