@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <sys/timerfd.h>
+#include <sys/wait.h>
 #include <cstring>
 #include <chrono>
 #include <thread>
@@ -12,6 +13,7 @@
 #include "config.h"
 #include "BlackBoard.h"
 
+static volatile bool shutdownFlage = false;
 struct WatchedProcess {
     char id;
     std::string name;
@@ -26,8 +28,11 @@ int create_timerfd();
 void reset_timer(int fd);
 void general_cleanUp();
 void heartbeat_received(WatchedProcess& p, Logger& logger);
+void handle_signal(int signum) {shutdownFlage = true;}
 
 int main() {
+    signal(SIGINT, handle_signal);  // For SIGINT from Ctrl+C (user)
+
     BlackBoard blackboard;
     Logger logger(SYSTEM_WIDE_LOG);
 
@@ -105,6 +110,13 @@ int main() {
             }
         }
 
+        if (shutdownFlage) { // check the flag
+            logger.log("Received SIGINT (Ctrl+C). Shutting down...", getpid(), Logger::LogLevel::WARNING);
+            shutdown_all_processes(procs, blackboard, logger);
+            return EXIT_SUCCESS;
+        }
+
+
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
@@ -119,16 +131,24 @@ void heartbeat_received(WatchedProcess& p, Logger& logger) {
 void shutdown_all_processes(const std::vector<WatchedProcess>& procs, BlackBoard& blackboard, Logger& logger) {
     logger.log("Watchdog initiating shutdown of all processes", getpid(), Logger::LogLevel::INFO);
 
-    // Send SIGTERM first
-    for (const auto& p : procs) {
-        if (p.pid > 0) kill(p.pid, SIGTERM);
+    if (!shutdownFlage) {  // if CTRL + C pressed don't send SIGTERM, terminate immediately
+        // Send SIGTERM first
+        for (const auto& p : procs) {
+            if (p.pid > 0) kill(p.pid, SIGTERM);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
-    std::this_thread::sleep_for(std::chrono::seconds(2));
 
     // Force kill any remaining processes
     for (const auto& p : procs) {
-        logger.log("Watchdog Shutting down: " + p.name + " PID=" + std::to_string(p.pid), getpid(), Logger::LogLevel::WARNING);
-        kill(p.pid, SIGKILL);
+        if (p.pid <= 0) 
+            continue;  // Skip invalid PIDs
+        if (kill(p.pid, 0) == 0) { // check if the process is still running
+            logger.log("Watchdog Shutting down: " + p.name + " PID=" + std::to_string(p.pid), getpid(), Logger::LogLevel::WARNING);
+            kill(p.pid, SIGKILL);  // Force kill the process
+        } else {
+            logger.log("Process already exited: " + p.name + " PID=" + std::to_string(p.pid), getpid(), Logger::LogLevel::INFO);
+        }
     }
 
     // Clean up shared resources

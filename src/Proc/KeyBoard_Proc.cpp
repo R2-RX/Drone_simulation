@@ -10,7 +10,7 @@
 #include "Logger.h"
 
 Logger logger(SYSTEM_WIDE_LOG);
-static bool shutdownFlage = false;
+static volatile bool shutdownFlage = false;
 
 void draw_tail_output(WINDOW* win);
 void print_center(WINDOW* win, int row, const char* str);

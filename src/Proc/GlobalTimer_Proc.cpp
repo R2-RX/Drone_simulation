@@ -12,7 +12,7 @@
 Logger logger(SYSTEM_WIDE_LOG);
 BlackBoard blackboard;
 
-static bool shutdownFlage = false; // plain bool
+static volatile bool shutdownFlage = false; // plain bool
 
 // ---------------------- Signal Handlers ----------------------
 

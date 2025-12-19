@@ -23,7 +23,7 @@ Logger logger(SYSTEM_WIDE_LOG);
 Ncurses_Win app;
 Space2D plane;
 
-static bool shutdownFlage = false;
+static volatile bool shutdownFlage = false;
 static PhysicsBody* my_drone = nullptr;
 
 const double FIXED_DELTA = 1.0 / UPS;   //dt
@@ -123,10 +123,9 @@ int main() {
             app.resize();
             plane.resize_to(cols, rows);
             blackboard.setPlayAreaSize(cols, rows);
-            blackboard.rescalePositions(cols, rows, reference_width, reference_height);
         }
-
-        //blackboard.unlockProcess();
+        // Apply rescale to all objects based on current and reference window sizes
+        blackboard.rescalePositions(cols, rows, reference_width, reference_height);
         
         write_item_info_to_file(std::string(LIVE_MONITORING), blackboard, fps, ups, alpha);
         // small sleep to avoid busy spinning if desired
@@ -243,14 +242,14 @@ void Update(double dt, Pair_* cmd) {
     }
 
     // -------------------------
-    // Cycle-based removal (every 10 seconds)
+    // Cycle-based removal (every N seconds)
     // -------------------------
     static int last_cycle = -1;
     double t = blackboard.getTimeStamp();       // in seconds
     int current_cycle = static_cast<int>(t / SPAWN_TIME_INTERVAL);
 
     if (current_cycle != last_cycle && current_cycle > 0) {
-        // remove old items once per 10-second cycle, skip first 10 seconds
+        // remove old items once per 10-second cycle, skip first N seconds
         std::pair<int,int> OT_num = blackboard.getSpawnRequestsNum();
         int sum_OT = OT_num.first + OT_num.second;
 

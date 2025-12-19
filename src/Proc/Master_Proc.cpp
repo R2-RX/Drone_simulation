@@ -21,7 +21,7 @@
 
 Logger logger(SYSTEM_WIDE_LOG);
 
-static bool shutdownFlage = false;
+static volatile bool shutdownFlage = false;
 
 void create_file(std::string name);
 void general_cleanUp();
@@ -97,16 +97,16 @@ int main() {
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    // pid_t pid = fork();
-    // if (pid == 0) {
-    //     execlp("./WatchDog_Proc", "./WatchDog_Proc", nullptr);
-    //     logger.log("execlp WatchDog_Proc failed"+ std::to_string(errno), blackboard.getProcessPid(WatchDogProcName::WatchDog_Proc) ,Logger::LogLevel::ERROR);
-    //     _exit(EXIT_FAILURE);
-    // }
-    // else if (pid > 0) {
-    //     blackboard.setProcessPid(WatchDogProcName::WatchDog_Proc, pid);
-    //     logger.log("WatchDog_Proc successfully Started ...", blackboard.getProcessPid(WatchDogProcName::WatchDog_Proc) ,Logger::LogLevel::INFO);
-    // }
+    pid = fork();
+    if (pid == 0) {
+        execlp("./WatchDog_Proc", "./WatchDog_Proc", nullptr);
+        logger.log("execlp WatchDog_Proc failed"+ std::to_string(errno), blackboard.getProcessPid(WatchDogProcName::WatchDog_Proc) ,Logger::LogLevel::ERROR);
+        _exit(EXIT_FAILURE);
+    }
+    else if (pid > 0) {
+        blackboard.setProcessPid(WatchDogProcName::WatchDog_Proc, pid);
+        logger.log("WatchDog_Proc successfully Started ...", blackboard.getProcessPid(WatchDogProcName::WatchDog_Proc) ,Logger::LogLevel::INFO);
+    }
 
     // --------------------------------------------------------------------------------- 
     // ---------------------------------------------------------------------------------
@@ -118,9 +118,11 @@ int main() {
     // ------ send a msg to watch dog -----
     // ------------------------------
     std::thread([&](){
-        while (!shutdownFlage) {
+        while (true) {
             master_pipe.send_data('M'); // heartbeat
             std::this_thread::sleep_for(std::chrono::milliseconds(10)); // send frequently enough
+            if (shutdownFlage) 
+                break; // watchdog will react
         }
         logger.log("Received SIGTERM, shutting down...", getpid(),Logger::LogLevel::WARNING);
     }).detach();

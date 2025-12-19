@@ -45,7 +45,7 @@ int main()
     Pipe<char> itemspawner_pipe_wd(ITEMSPAWNER_PIPE_WD);
 
     
-    // ----------Heartbeat thread (detached)------------
+    // ----------*********88Heartbeat thread (detached)*************------------
     std::thread heartbeat(
         [&]()
         {
@@ -54,7 +54,7 @@ int main()
                 std::memory_order_relaxed
             );
             const int64_t SPAWN_TIMEOUT_NS = static_cast<int64_t>(SPAWN_TIME_INTERVAL +1) * 1'000'000'000LL; // give the thread two times to try (SPAWN_TIME_INTERVAL +1)
-            while (!shutdownFlage.load(std::memory_order_relaxed))
+            while (true)
             {
                 // Send alive signal
                 itemspawner_pipe_wd.send_data('S');
@@ -73,10 +73,13 @@ int main()
                     );
                     break; // watchdog will react
                 }
+                if (shutdownFlage.load(std::memory_order_relaxed)) {
+                    break; // watchdog will react
+                }
             }
 
             logger.log(
-                "Heartbeat thread exiting.",
+                "Spawner Heartbeat thread exiting.",
                 getpid(),
                 Logger::LogLevel::INFO
             );
@@ -150,7 +153,7 @@ int main()
                 data.Pos_y = std::rand() % height;
                 data.mass = 500.0;
                 data.visc_damp_coef = 1000;
-                data.attr_coef = 20.0;
+                data.attr_coef = ATTRACTION_COEFFICIENT;
                 data.active = true;
 
                 blackboard.addItem_protected(data);
@@ -167,7 +170,7 @@ int main()
                 data.Pos_y = std::rand() % height;
                 data.mass = 500.0;
                 data.visc_damp_coef = 1000;
-                data.repl_coef = 30.0;
+                data.repl_coef = REPULSIVE_COEFFICIENT;
                 data.active = true;
 
                 blackboard.addItem_protected(data);

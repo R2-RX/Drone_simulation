@@ -47,6 +47,10 @@
 
 #define SPAWN_TIME_INTERVAL 20 // 20 seconds
 
+// Object Coefficents (T and O)
+#define  ATTRACTION_COEFFICIENT 20
+#define  REPULSIVE_COEFFICIENT 30
+
 // File
 #define LIVE_MONITORING  "live_monitoring.txt"
 #define SYSTEM_WIDE_LOG  "system_wide.log"

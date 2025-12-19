@@ -107,25 +107,29 @@ void BlackBoard::removeItem(int index) {
 void BlackBoard::rescalePositions(int current_width_, int current_height_, int reference_width_, int reference_height_) {
     double scaleX = static_cast<double>(current_width_) / reference_width_;
     double scaleY = static_cast<double>(current_height_) / reference_height_;
+    static int current_w ;
+    static int current_h ;
 
-    std::vector<ItemLogic*> objects = this->getAllLogicObjects();
+    if (current_width_ != current_w  || current_height_ != current_h) { 
 
-    for (auto* obj : objects) {
-        auto* phys_obj = dynamic_cast<PhysicsBody*>(obj);
-        if (!phys_obj) continue;
+        std::vector<ItemLogic*> objects = this->getAllLogicObjects();
 
-        // If this object doesn't have an initial position stored yet, save its current position (for new objects)
-        if (initialPositions.find(phys_obj) == initialPositions.end()) {
-            initialPositions[phys_obj] = phys_obj->getPosition();
+        for (auto* obj : objects) {
+            auto* phys_obj = dynamic_cast<PhysicsBody*>(obj);
+            if (!phys_obj) continue;
+
+            if (obj->get_data_ptr()->type == ItemData::ItemType::Drone)  // skip the Drone objects
+                continue;
+
+            // If this object doesn't have an initial position stored yet, save its current position (for new objects)
+            if (initialPositions.find(phys_obj) == initialPositions.end()) {
+                initialPositions[phys_obj] = phys_obj->getPosition();
+            }
+
+            // Scaling
+            auto [initX, initY] = initialPositions[phys_obj];
+            phys_obj->setPosition(initX * scaleX, initY * scaleY);
         }
-        if (obj->get_data_ptr()->type == ItemData::ItemType::Drone) {
-            Logger log ("DDD.txt");
-            log.log (std::to_string(obj->get_data_ptr()->Pos_x) + "," + std::to_string(obj->get_data_ptr()->Pos_y),123, Logger::LogLevel::WARNING);
-        }
-
-        // Scaling
-        auto [initX, initY] = initialPositions[phys_obj];
-        phys_obj->setPosition(initX * scaleX, initY * scaleY);
     }
 }
 
