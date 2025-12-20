@@ -2,13 +2,11 @@
 #include "Space2DLogic.h" 
 #include <cmath>
 
-
 // Constructor
 PhysicsBody::PhysicsBody(ItemData& item_) : ItemLogic(item_) {}
 
 // Initialize body state
 void PhysicsBody::initialize(double initial_x, double initial_y) {
-    std::lock_guard<std::mutex> lock(item_data_mutex);
     data->Pos_x = initial_x;
     data->Pos_y = initial_y;
     data->Vel_x = 0.0;
@@ -21,24 +19,20 @@ void PhysicsBody::initialize(double initial_x, double initial_y) {
 }
 // -------------------- Position & Velocity --------------------
 void PhysicsBody::setPosition(double x, double y) {
-    std::lock_guard<std::mutex> lock(item_data_mutex);
     data->Pos_x = x;
     data->Pos_y = y;
 }
 
 std::pair<double, double> PhysicsBody::getPosition() const {
-    std::lock_guard<std::mutex> lock(item_data_mutex);
     return {data->Pos_x, data->Pos_y};
 }
 
 void PhysicsBody::setVelocity(double vx, double vy) {
-    std::lock_guard<std::mutex> lock(item_data_mutex);
     data->Vel_x = vx;
     data->Vel_y = vy;
 }
 
 std::pair<double,double> PhysicsBody::getVelocity() const {
-    std::lock_guard<std::mutex> lock(item_data_mutex);
     return { data->Vel_x, data->Vel_y };
 }
 
@@ -51,7 +45,6 @@ void PhysicsBody::resetForces() {
 
 // Apply thrust
 void PhysicsBody::apply_thrust(double fx, double fy) {
-    std::lock_guard<std::mutex> lock(item_data_mutex);
     data->Force_x += fx;
     data->Force_y += fy;
 }
@@ -61,9 +54,8 @@ void PhysicsBody::computeRepulsiveForce(const std::vector<ItemData*>& obstacles,
     double fx_total = 0.0;
     double fy_total = 0.0;
 
-    std::lock_guard<std::mutex> lock(item_data_mutex); // lock self
+     // lock self
     for (const auto* ob : obstacles) {
-        std::lock_guard<std::mutex> ob_lock(obstacle_mutex); // lock obstacle
         if (!ob->active) continue;
 
         double dx = data->Pos_x - ob->Pos_x;
@@ -88,8 +80,6 @@ void PhysicsBody::computeRepulsiveForce(const std::vector<ItemData*>& obstacles,
 
 // Compute attractive force toward target
 void PhysicsBody::computeAttractiveForce(const ItemData& target) {
-    std::lock_guard<std::mutex> lock(item_data_mutex);
-    std::lock_guard<std::mutex> target_lock(target_mutex); // read target safely
 
     double dx = data->Pos_x - target.Pos_x;
     double dy = data->Pos_y - target.Pos_y;
@@ -100,7 +90,6 @@ void PhysicsBody::computeAttractiveForce(const ItemData& target) {
 
 // Physics update: forces -> acceleration -> velocity -> position
 void PhysicsBody::physical_interaction(double dt) {
-    std::lock_guard<std::mutex> lock(item_data_mutex);
 
     const double inv_mass = (data->mass > EPSILON) ? 1.0 / data->mass : EPSILON;
 
@@ -129,6 +118,13 @@ void PhysicsBody::physical_interaction(double dt) {
         data->distance_traveled += std::hypot(data->Vel_x * dt, data->Vel_y * dt);
     }
 
+    const double max_velocity = 50.0;  // Max velocity in any direction
+    if (std::hypot(data->Vel_x, data->Vel_y) > max_velocity) {
+        double angle = std::atan2(data->Vel_y, data->Vel_x);
+        data->Vel_x = max_velocity * std::cos(angle);
+        data->Vel_y = max_velocity * std::sin(angle);
+    }
+
     // Reset forces for next step
     // data->Force_x = 0.0;
     // data->Force_y = 0.0;
@@ -136,6 +132,13 @@ void PhysicsBody::physical_interaction(double dt) {
 
 // Wall collision
 void PhysicsBody::checkWallCollision(Space2D& space) {
-    std::lock_guard<std::mutex> lock(item_data_mutex);
     space.Wall_Reflect(this);
+}
+
+// Rescale the position of the PhysicsBody based on the scaling factors
+void PhysicsBody::rescale(double scaleX, double scaleY) {
+    auto [initX, initY] = getPosition();
+    double scaledX = initX * scaleX;
+    double scaledY = initY * scaleY;
+    setPosition(scaledX, scaledY);  // Apply the scaled position to the object
 }

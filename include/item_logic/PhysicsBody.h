@@ -40,6 +40,9 @@ public:
     // Wall collision
     void checkWallCollision(Space2D& space);
 
+    // Rescale the position of the PhysicsBody based on the scaling factors
+    void rescale(double scaleX, double scaleY);
+
 private:
     const double EPSILON = 1e-9;  // To avoid division by zero
     std::mutex obstacle_mutex;

@@ -4,7 +4,9 @@ Ncurses_Win::Ncurses_Win()
     : H(0), W(0), wh(0), ww(0), wy(0), wx(0), win(nullptr)
 {
     setlocale(LC_ALL, "");
+    setenv("TERM", "xterm-256color", 1);
     initscr();
+    start_color(); // initialize color functionality
     cbreak();
     noecho();
     curs_set(0);
@@ -18,6 +20,7 @@ Ncurses_Win::Ncurses_Win()
         throw std::runtime_error("Failed to create ncurses window");
     }
 
+    setup_colors(); // Setup the colors for each object
     redrawFrame();
 }
 
@@ -63,7 +66,7 @@ void Ncurses_Win::redrawFrame() {
     mvaddch(bottom, right, ACS_LRCORNER);
 
     mvprintw(0, 0, "Press 'ESC' to exit | Terminal: %dx%d | Window: %dx%d",
-             H, W, wh, ww);
+             W, H, ww, wh);
 
     refresh();
     wrefresh(win);
@@ -97,9 +100,43 @@ void Ncurses_Win::drawAll(Space2D&, WINDOW* win, BlackBoard& BB, double scale) {
 
         // Prevent out-of-bounds crashes
         if (sy >= 0 && sy < h && sx >= 0 && sx < w) {
-            mvwaddch(win, sy, sx, logic->symbol());
+            switch (logic->get_data_ptr()->type) {
+                case ItemData::ItemType::Target:
+                    // Apply red color for Target
+                    wattron(win, COLOR_PAIR(3));
+                    mvwaddch(win, sy, sx, logic->symbol() | A_BOLD);
+                    wattroff(win, COLOR_PAIR(3));
+                    break;
+
+                case ItemData::ItemType::Obstacle:
+                    // Apply blue color for Obstacle
+                    wattron(win, COLOR_PAIR(4));
+                    mvwaddch(win, sy, sx, logic->symbol());
+                    wattroff(win, COLOR_PAIR(4));
+                    break;
+
+                case ItemData::ItemType::Drone:
+                    // Apply green color for Drone
+                    wattron(win, COLOR_PAIR(2));
+                    mvwaddch(win, sy, sx, logic->symbol() | A_BOLD);
+                    wattroff(win, COLOR_PAIR(2));
+                    break;
+
+            }
         }
     }
 
     wrefresh(win);
+}
+
+void Ncurses_Win::setup_colors() {
+    // Initialize color pairs
+    init_pair(1, COLOR_RED,     COLOR_BLACK);
+    init_pair(2, COLOR_GREEN,   COLOR_BLACK);
+    init_pair(3, COLOR_YELLOW,  COLOR_BLACK);
+    init_pair(4, COLOR_BLUE,    COLOR_BLACK);
+    init_pair(5, COLOR_MAGENTA, COLOR_BLACK);
+    init_pair(6, COLOR_CYAN,    COLOR_BLACK);
+    init_pair(7, COLOR_WHITE,   COLOR_BLACK);
+
 }

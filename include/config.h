@@ -32,7 +32,6 @@
 #define Scaleing_pixel_to_meter 0.3125
 
 #define UPS  30         // Update per-second (dt = 1/UPS)
-#define TARGET_OBSTACLE_GENERATION_DELAY  6 // generate every 6 seconds
 
 // watch dog Pipe lines 
 #define GLOBALTIMER_PIPE_WD     "/tmp/globaltimer_pipe_wd"
@@ -41,9 +40,8 @@
 #define KEYBOARD_PIPE_WD        "/tmp/keyboard_pipe_wd"
 #define ITEMSPAWNER_PIPE_WD     "/tmp/itemspawner_pipe_wd"
 
-#define WATCHDOG_Timer_DELAY   50  // 2000 ms between heartbeat checks // just check the spawner counter if you want to be accurate
-#define MAX_PIPE_RETRIES 100  // (MAX_RETRIES*10ms)/1000 sec for opening pipes
-#define WATCHDOG_TIMEOUT_SECONDS 3// 5 seconds before declaring timeout
+//#define MAX_PIPE_RETRIES 100  // (MAX_RETRIES*10ms)/1000 sec for opening pipes]
+#define WATCHDOG_TIMEOUT_SECONDS 2 // seconds before declaring timeout
 
 #define SPAWN_TIME_INTERVAL 20 // 20 seconds
 
@@ -55,5 +53,9 @@
 #define LIVE_MONITORING  "live_monitoring.txt"
 #define SYSTEM_WIDE_LOG  "system_wide.log"
 //#define Save_GAME_DATA  "game_data.dat"
+
+#define DRONE_MASS 10
+#define DRONE_NON_PHYSICAL_FORCE (DRONE_MASS * 3) // for real simulation set it to zero
+#define DRONE_FRICTION_FACTOR (DRONE_MASS * 2)  //  for real simulation set it to proper number 
 
 #endif // CONFIG_H

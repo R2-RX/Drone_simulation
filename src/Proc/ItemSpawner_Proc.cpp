@@ -128,9 +128,9 @@ int main()
                     ItemData data{};
                     data.type = ItemData::ItemType::Drone;
                     data.Pos_x = 0.1;
-                    data.Pos_y = 0.1;
-                    data.mass = 10.0;
-                    data.visc_damp_coef = 1;
+                    data.Pos_y = static_cast<double>(height) - 1;
+                    data.mass = DRONE_MASS;
+                    data.visc_damp_coef = DRONE_FRICTION_FACTOR;
                     data.active = true;
 
                     blackboard.addItem_protected(data);

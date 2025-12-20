@@ -2,15 +2,12 @@
 #include <cmath>
 #include <iostream>
 
-std::mutex item_data_mutex;   // <--- single definition
-
 double roundTo(double value, int decimals) {
     double factor = std::pow(10.0, decimals);
     return std::round(value * factor) / factor;
 }
 
 void roundItemData(ItemData& data, int decimals) {
-    std::lock_guard<std::mutex> lock(item_data_mutex);
 
     data.Pos_x = roundTo(data.Pos_x, decimals);
     data.Pos_y = roundTo(data.Pos_y, decimals);
@@ -41,8 +38,6 @@ const char* type_to_string(ItemData::ItemType type) {
 }
 
 void print_item_info(const ItemData& item) {
-    std::lock_guard<std::mutex> lock(item_data_mutex);
-
     std::cout << "Item Data:\n";
     std::cout << "------------------------------\n";
     std::cout << "Type: " << type_to_string(item.type) << "\n";

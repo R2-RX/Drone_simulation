@@ -122,10 +122,9 @@ int main() {
         if (ch == KEY_RESIZE) {
             app.resize();
             plane.resize_to(cols, rows);
-            blackboard.setPlayAreaSize(cols, rows);
         }
         // Apply rescale to all objects based on current and reference window sizes
-        blackboard.rescalePositions(cols, rows, reference_width, reference_height);
+        plane.rescalePositions(blackboard, cols, rows);
         
         write_item_info_to_file(std::string(LIVE_MONITORING), blackboard, fps, ups, alpha);
         // small sleep to avoid busy spinning if desired
@@ -193,8 +192,6 @@ void findFirstDrone() {
 }
 
 // -------------------- Update --------------------
-
-
 void Update(double dt, Pair_* cmd) {
     // Update drone-related stats
     blackboard.updateDroneStats(dt);
@@ -275,7 +272,7 @@ void Update(double dt, Pair_* cmd) {
         ItemData* data = phys_obj->getItemData();
         if (data && data->type == ItemData::ItemType::Drone) {
             // Repulsion from obstacles + physical integration
-            phys_obj->computeRepulsiveForce(obstacles, 10.0);
+            phys_obj->computeRepulsiveForce(obstacles, 5.0);
 
             // Attraction to current target (commented in original)
             // if (blackboard.current_target)

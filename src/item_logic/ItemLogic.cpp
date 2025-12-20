@@ -5,7 +5,6 @@
 ItemLogic::ItemLogic(ItemData& item_) : data(&item_) {}
 
 void ItemLogic::reset() {
-    std::lock_guard<std::mutex> lock(data_mutex);
     data->Pos_x = data->Pos_y = 1.0;
     data->Force_x = data->Force_y = 0.0;
     data->Vel_x = data->Vel_y = 0.0;

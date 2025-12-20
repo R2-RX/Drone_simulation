@@ -85,7 +85,9 @@ void draw_tail_output(WINDOW* win) {
     int row = 10;
 
     while (fgets(buffer, sizeof(buffer), pipe) && row < getmaxy(win) - 1) {
+        wattron(win, COLOR_PAIR(6) | A_BOLD);
         mvwprintw(win, row++, 1, "%s", buffer);
+        wattroff(win, COLOR_PAIR(6) | A_BOLD);
     }
 
     pclose(pipe);
@@ -100,6 +102,7 @@ void print_center(WINDOW* win, int row, const char* str) {
 }
 
 void draw_keys(WINDOW* win) {
+    wattron(win, COLOR_PAIR(3) | A_BOLD);  
     print_center(win, 1, "Use the following keys to move:");
     print_center(win, 3, "Q W E");
     print_center(win, 4, "A S D");
@@ -108,5 +111,6 @@ void draw_keys(WINDOW* win) {
     print_center(win, 9, "   ↑ ");
     print_center(win, 10, "    ←   →");
     print_center(win, 11, "   ↓ ");
+    wattroff(win, COLOR_PAIR(3) | A_BOLD);
     wrefresh(win);
 }

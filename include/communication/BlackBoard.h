@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <semaphore.h>
 #include <cmath>
+#include <algorithm>
 
 #include "config.h"
 #include "SharedMemoryData.h"
@@ -58,8 +59,6 @@ struct BlackBoardShared {
 
     int Width_play_area = 0;
     int Height_play_area = 0;
-    
-    std::pair<double,double> ref_positions;
 
     double g_timeStamp;
 };
@@ -75,8 +74,6 @@ private:
     std::array<uint32_t, MAX_LOGIC_OBJECTS> logicGenerations{}; //genetation stamps which is basically a counter to track versions of 
                                                                //logic objects and by tracking versions we mean if an object has been removed and a new object has taken its place in the same slot
     std::vector<int> freeLogicSlots; //this keeps track of free slots in logic pool
-
-    std::unordered_map<ItemLogic*, std::pair<double,double>> initialPositions;
 
 public:
     BlackBoard(const std::string& shm_name = SHM_NAME);
@@ -116,8 +113,6 @@ public:
     void removeItem(int index);
 
     // -------- Global Simulation State --------
-    void rescalePositions(int current_width_, int current_height_, int reference_width_, int reference_height_);
-
     void updateDroneStats(double dt);
 
     void setSpawnRequestsNum(int obstacles, int targets);

@@ -151,6 +151,17 @@ where:
 - η (Eta) is the gain factor
 - d is the influence radius
 
+## Log Messages Overview
+Log messages can be viewed both in the terminal and in a log file. If you need more detailed information, 
+such as heartbeats from the watchdog or other related data, you can find it in the system_wide.log file located in the processes folder.
+
+![alt text](images/LogPic.png)
+
+#### Log Levels
+There are four different log levels:
+
+![alt text](images/LogLevels.png)
+
 ## How to Build and Run
 #### Dependencies
 - `Konsole` for terminal 
@@ -181,16 +192,34 @@ cd processes
 ---
 
 ## Description of Components 
-#### Master
-Forks and executes other processes. (under development)
+#### Master Process
 
-#### GlobalTimer
-Start the game timer
+The Master Process is responsible for launching and managing child processes `(e.g., GlobalTimer, Keyboard, GameLoop, ItemSpawner, Watchdog)` using `fork() and execlp()`. 
+It sets up inter-process communication through pipes, logs the processes' statuses, and sends heartbeat signals to the Watchdog. It monitors the status of child processes 
+and ensures proper cleanup and shutdown in case of failure.
 
-#### ItemSpawner
-stores `Drone (#)`, `Obstacles (O)` and `Targets (*)` in the shared memory.
+#### Watchdog Process
 
-#### GameLoop
-Loads the store data and runs the game's logical and graphical components.
+The Watchdog Process monitors the health of child processes by polling for heartbeat signals via pipes and timers. 
+If any process fails to send a heartbeat within the timeout period, the Watchdog initiates a shutdown sequence, 
+first sending `SIGTERM` and then `SIGKILL` if needed. It logs the status of each process, handles cleanup, 
+and ensures all resources are released when shutting down.
+
+#### GlobalTimer Process
+Handles the global time for the game. It triggers every 1 millisecond using POSIX timers and updates the shared BlackBoard with the current time. 
+It also sends heartbeat signals to ensure the timer is alive.
+
+#### ItemSpawner Process
+Responsible for spawning game objects (`Drone (#)`, `Obstacles (O)`, `Targets (*)` ) in the shared memory. 
+It uses the BlackBoard to get the play area size and randomly generates positions for the items. It also includes a heartbeat mechanism to signal if the spawner is still active.
+
+#### GameLoop Process
+The core of the game where all game objects are updated, physics are applied, and the game is rendered. 
+It ensures the game runs at a fixed time step for consistent physics and processes user input. 
+It also handles object spawning, updates, and removals based on game logic.
+
+#### Keyboard Process
+The Keyboard process captures user input via the keyboard and sends movement commands to the GameLoop (via pipe). It uses ncurses for non-blocking key presses, 
+handling movement with keys like WASD, arrow keys, and diagonals (Q, E, Z, C). The X key is used to reset the Force (thrust) to zero, effectively stopping the drone's movement.
 
 ---

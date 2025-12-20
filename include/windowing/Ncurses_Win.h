@@ -26,6 +26,7 @@ public:
     std::pair<int,int> getcurrentsize() const;
 
     void drawAll(Space2D& space, WINDOW* win, BlackBoard& BB, double scale);
+    void setup_colors();
 
     WINDOW* getWindow() const { return win; }
 };

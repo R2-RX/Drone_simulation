@@ -40,8 +40,6 @@ void BlackBoard::removeLogicObject(ItemLogic* obj) {
     if (logicGenerations[index] != obj->bb_generation)
         throw std::runtime_error("Stale pointer passed to removeLogicObject");
 
-    initialPositions.erase(obj);
-
     delete obj;
     logicPool[index] = nullptr;
 
@@ -103,36 +101,6 @@ void BlackBoard::removeItem(int index) {
 }
 
 // -------- Simulation State --------
-
-void BlackBoard::rescalePositions(int current_width_, int current_height_, int reference_width_, int reference_height_) {
-    double scaleX = static_cast<double>(current_width_) / reference_width_;
-    double scaleY = static_cast<double>(current_height_) / reference_height_;
-    static int current_w ;
-    static int current_h ;
-
-    if (current_width_ != current_w  || current_height_ != current_h) { 
-
-        std::vector<ItemLogic*> objects = this->getAllLogicObjects();
-
-        for (auto* obj : objects) {
-            auto* phys_obj = dynamic_cast<PhysicsBody*>(obj);
-            if (!phys_obj) continue;
-
-            if (obj->get_data_ptr()->type == ItemData::ItemType::Drone)  // skip the Drone objects
-                continue;
-
-            // If this object doesn't have an initial position stored yet, save its current position (for new objects)
-            if (initialPositions.find(phys_obj) == initialPositions.end()) {
-                initialPositions[phys_obj] = phys_obj->getPosition();
-            }
-
-            // Scaling
-            auto [initX, initY] = initialPositions[phys_obj];
-            phys_obj->setPosition(initX * scaleX, initY * scaleY);
-        }
-    }
-}
-
 void BlackBoard::updateDroneStats(double dt) {
     shm_data.with_lock([&](BlackBoardShared* data) {
         for (int i = 0; i < MAX_ITEMS; ++i) {
