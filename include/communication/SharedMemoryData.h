@@ -41,7 +41,7 @@ public:
 template<typename Generic_type>
 SharedMemoryData<Generic_type>::SharedMemoryData(const std::string& name)
     : Communication<Generic_type>(nullptr), shm_name(name) {
-
+        
     // Open or create the shared memory object
     shm_fd = shm_open(shm_name.c_str(), O_CREAT | O_RDWR, 0666);
     if (shm_fd == -1) {
@@ -66,7 +66,7 @@ SharedMemoryData<Generic_type>::SharedMemoryData(const std::string& name)
     this->generic_data = static_cast<Generic_type*>(mapped_ptr);
 
     // Open or create semaphore (leading "/" required)
-    std::string sem_name = "/" + shm_name + "_sem";
+    std::string sem_name = BLACKBOARD_SHM_SEM;
     semaphore = sem_open(sem_name.c_str(), O_CREAT, 0666, 1); // binary semaphore
     if (semaphore == SEM_FAILED) {
         munmap(mapped_ptr, sizeof(Generic_type));
@@ -158,7 +158,7 @@ void SharedMemoryData<Generic_type>::clean_up() {
     shm_unlink(shm_name.c_str());
 
     // Unlink semaphore
-    std::string sem_name = "/" + shm_name + "_sem";
+    std::string sem_name = BLACKBOARD_SHM_SEM;
     sem_unlink(sem_name.c_str());
 }
 

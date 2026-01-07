@@ -25,6 +25,7 @@
 #include <semaphore.h>
 #include <cmath>
 #include <algorithm>
+#include <cstdio>
 
 #include "config.h"
 #include "SharedMemoryData.h"
@@ -32,17 +33,35 @@
 #include "PhysicsBody.h"
 #include "Logger.h"
 
+//The structs and the enums are shared definition-- not a shared memory structure
+struct Menu {
+    // Menu sections and choices
+    enum class Section { MAIN_MENU, NETWORK_MENU };
+    enum class MainChoice { STANDALONE, NETWORK, EXIT_MAIN };
+    enum class NetworkChoice { SERVER, CLIENT, BACK };
+
+    // Menu labels
+    static inline const char* mainMenuLabels[] = { "standalone", "network", "Exit" };
+    static inline const char* networkMenuLabels[] = { "server", "client", "back" };
+};
+
+struct MenuResult {
+    Menu::Section section; // which section the result is from
+    int choice;            // stores MainChoice or NetworkChoice as int
+};
+
 enum WatchDogProcName { 
     GlobalTimer_Proc,  
     Keyboard_Proc, 
     GameLoop_Proc, 
     ItemSpawner_Proc,
     Master_Proc,
+    NetworkGate_Proc,
     WatchDog_Proc,
     WD_Count }; 
 
 //keyboard input
-struct Pair_{double x ,y;};
+struct Point{double x ,y;};
 
 // POD shared memory layout
 struct BlackBoardShared {
@@ -53,6 +72,9 @@ struct BlackBoardShared {
     int target_spawn_request_num = 0;
     int drone_spawn_request_num = 0;
 
+    int Game_mode = 0;
+    int Network_side = 0; // server = 0 ,clinet = 1
+
     bool Spawn_Status = true;
 
     int64_t simulationGlobalTime = 0;
@@ -60,14 +82,18 @@ struct BlackBoardShared {
     int Width_play_area = 0;
     int Height_play_area = 0;
 
+    char IP[64];
+    char Port[16];
+
     double g_timeStamp;
 };
 
+// BlackBoard class managing shared memory and logic objects
 class BlackBoard {
 private:
     SharedMemoryData<BlackBoardShared> shm_data;
 
-    sem_t* spawnSemaphore = nullptr;
+    sem_t* syncSemaphore = nullptr;
 
     // Logic Pool
     std::array<ItemLogic*, MAX_LOGIC_OBJECTS> logicPool{}; //pointer to ItemLogic which holds address of object data in shared memory
@@ -80,8 +106,6 @@ public:
     ~BlackBoard();
 
      ItemData* current_target = nullptr;
-
-    void clean_up () { shm_data.clean_up();}
      
     // -------- Logic Management --------
     template<typename LogicType>
@@ -124,8 +148,8 @@ public:
     void setPlayAreaSize(int width, int height);
     std::pair<int,int> getPlayAreaSize();
 
-    void waitSpawnPermission();
-    void signalSpawnPermission();
+    void waitForPermission();
+    void signalPermission();
 
     pid_t getProcessPid(int index);
     void setProcessPid(int index, pid_t P);
@@ -135,6 +159,17 @@ public:
     
     double getTimeStamp();
 
+    void setGameMode(Menu::MainChoice choice);
+    Menu::MainChoice getGameMode();
+
+    void setNetworkSide(Menu::NetworkChoice choice);
+    Menu::NetworkChoice getNetworkSide();
+
+    void setIP(const std::string& ip);
+    std::string getIP();
+
+    void setPort(const std::string& port);
+    std::string getPort();
 };
 
 #endif // BLACKBOARD_H

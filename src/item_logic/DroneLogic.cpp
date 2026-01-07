@@ -1,7 +1,7 @@
 #include "DroneLogic.h"
 #include <cmath>   // for std::pow, std::round
 
-// Constructor
+
 DroneLogic::DroneLogic(ItemData& item_) : PhysicsBody(item_) {
     data->type = ItemData::ItemType::Drone;
 }
@@ -27,9 +27,9 @@ void DroneLogic::on_collide_with(PhysicsBody& other) {
     double dx = other.getPosition().first - this->getPosition().first;
     double dy = other.getPosition().second - this->getPosition().second;
 
-    if (std::sqrt(dx * dx + dy * dy) < 1) { // Simple collision threshold
+    if (std::sqrt(dx * dx + dy * dy) < 1) { // collision threshold
 
-        ItemData* otherData = other.get_data_ptr();
+        ItemData* otherData = other.getItemData();
         if (!otherData) return;
 
         switch (otherData->type) {

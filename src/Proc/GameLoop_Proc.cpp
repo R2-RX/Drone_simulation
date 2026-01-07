@@ -17,27 +17,28 @@
 #include "BlackBoard.h"
 #include "Logger.h"
 
-
 BlackBoard blackboard;
 Logger logger(SYSTEM_WIDE_LOG);
 Ncurses_Win app;
 Space2D plane;
 
-static volatile bool shutdownFlage = false;
+static volatile bool shutdownFlag = false;
 static PhysicsBody* my_drone = nullptr;
 
 const double FIXED_DELTA = 1.0 / UPS;   //dt
 
 void createLogicForNewItems();
 void findFirstDrone();
-void Update(double dt, Pair_* cmd);
+void droneControllerKeyboardUpdate(Point* cmd, PhysicsBody *my_drone);
+void Update(double dt, Point* cmd);
 void renderAll();
 void write_item_info_to_file(const std::string& filename, BlackBoard& BB, int fps, int ups, double alpha);
 
-void handle_sigterm(int signum) {shutdownFlage = true;}
+void handle_sigterm(int signum) {shutdownFlag = true;}
 //----------------------------------------------------------------
 int main() {
     signal(SIGTERM, handle_sigterm); // from watchdog
+    signal(SIGINT, handle_sigterm); // Ctrl+C
 
     int rows, cols;
     getmaxyx(app.getWindow(), rows, cols);
@@ -47,14 +48,14 @@ int main() {
     auto [reference_width, reference_height] = blackboard.getPlayAreaSize();
 
     blackboard.setSpawnStatus(true);
-    blackboard.signalSpawnPermission();
+    blackboard.signalPermission();
 
     // Create logic objects for items that exist at startup (if any)
     createLogicForNewItems();
     // Set my_drone if present
     findFirstDrone();
 
-    Pipe<Pair_> keyboard_pipe(KEYBOARD_Data_PIPE);
+    Pipe<Point> keyboard_pipe(KEYBOARD_Data_PIPE);
 
     int64_t previous = blackboard.getGlobalTime();
     double accumulator = 0.0;
@@ -78,7 +79,7 @@ int main() {
             break; // ESC
         }
 
-        if (shutdownFlage) { 
+        if (shutdownFlag) { 
             logger.log("Received SIGTERM, shutting down...", getpid(),Logger::LogLevel::WARNING);
             break; 
         }
@@ -98,7 +99,7 @@ int main() {
         accumulator += frameTime;
 
         while (accumulator >= FIXED_DELTA) {
-            Pair_* cmd = keyboard_pipe.receive_data();
+            Point* cmd = keyboard_pipe.receive_data();
             Update(FIXED_DELTA, cmd);
             accumulator -= FIXED_DELTA;
             updates++;
@@ -191,18 +192,41 @@ void findFirstDrone() {
     }
 }
 
+void droneControllerKeyboardUpdate(Point* cmd, PhysicsBody *my_drone) {
+    static Point last_dir{0.0, 0.0};
+
+    if (cmd && my_drone) {
+
+        Point dir{
+            static_cast<double>((cmd->x > 0.0) - (cmd->x < 0.0)),
+            static_cast<double>((cmd->y > 0.0) - (cmd->y < 0.0))
+        };  // Detect direction sign of current input
+
+        if (dir.x != 0.0 || dir.y != 0.0) {
+
+            if (dir.x != last_dir.x || dir.y != last_dir.y) {
+                my_drone->resetVelocity();
+                my_drone->resetForces();
+            }
+
+            my_drone->apply_thrust(cmd->x, cmd->y);
+            last_dir = dir;
+
+        } else {
+            my_drone->resetForces();
+            last_dir = {0.0, 0.0};
+        }
+    }
+}
+
 // -------------------- Update --------------------
-void Update(double dt, Pair_* cmd) {
+void Update(double dt, Point* cmd) {
     // Update drone-related stats
+    auto mode = blackboard.getGameMode();
     blackboard.updateDroneStats(dt);
 
-    // Apply keyboard thrust commands if available
-    if (cmd && my_drone) {
-        my_drone->apply_thrust(cmd->x, cmd->y);
-
-        if (cmd->x == 0.0 && cmd->y == 0.0) 
-            my_drone->resetForces();  // sets Fx = Fy = 0
-    }
+    // Apply keyboard thrust commands if available (Drone controller)
+    droneControllerKeyboardUpdate (cmd, my_drone);
 
     // Reflect only if drone exists
     if (my_drone) {
@@ -241,20 +265,22 @@ void Update(double dt, Pair_* cmd) {
     // -------------------------
     // Cycle-based removal (every N seconds)
     // -------------------------
-    static int last_cycle = -1;
-    double t = blackboard.getTimeStamp();       // in seconds
-    int current_cycle = static_cast<int>(t / SPAWN_TIME_INTERVAL);
+    if (mode == Menu::MainChoice::STANDALONE) {
+        static int last_cycle = -1;
+        double t = blackboard.getTimeStamp();       // in seconds
+        int current_cycle = static_cast<int>(t / SPAWN_TIME_INTERVAL);
 
-    if (current_cycle != last_cycle && current_cycle > 0) {
-        // remove old items once per 10-second cycle, skip first N seconds
-        std::pair<int,int> OT_num = blackboard.getSpawnRequestsNum();
-        int sum_OT = OT_num.first + OT_num.second;
+        if (current_cycle != last_cycle && current_cycle > 0) {
+            // remove old items once per 10-second cycle, skip first N seconds
+            std::pair<int,int> OT_num = blackboard.getSpawnRequestsNum();
+            int sum_OT = OT_num.first + OT_num.second;
 
-        for (int i = sum_OT ; i > 0 ; --i) // remove from end safely
-            blackboard.removeItem(i);
+            for (int i = sum_OT ; i > 0 ; --i) // remove from end safely
+                blackboard.removeItem(i);
 
-        blackboard.setSpawnStatus(true);
-        last_cycle = current_cycle;
+            blackboard.setSpawnStatus(true);
+            last_cycle = current_cycle;
+        }
     }
 
     // -------------------------
@@ -264,15 +290,21 @@ void Update(double dt, Pair_* cmd) {
         PhysicsBody* phys_obj = dynamic_cast<PhysicsBody*>(obj);
         if (!phys_obj) continue;
 
+        // Reflect Obstacle only if the simulation is in the network mode
+        if (mode == Menu::MainChoice::NETWORK && phys_obj->getItemData()->type == ItemData::ItemType::Obstacle) {
+            plane.Wall_Reflect(phys_obj);
+            // since the program only recives the position there is no need to get the froce 
+        }
+        
         // Handle collisions with my_drone
         if (my_drone && my_drone != phys_obj) {
             my_drone->on_collide_with(*phys_obj);
         }
 
         ItemData* data = phys_obj->getItemData();
-        if (data && data->type == ItemData::ItemType::Drone) {
+        if (data && data->type == ItemData::ItemType::Drone || mode == Menu::MainChoice::NETWORK) { // update all objects in NETWORK mode
             // Repulsion from obstacles + physical integration
-            phys_obj->computeRepulsiveForce(obstacles, 5.0);
+            phys_obj->computeRepulsiveForce(obstacles, 4.0);
 
             // Attraction to current target (commented in original)
             // if (blackboard.current_target)
@@ -287,6 +319,16 @@ void Update(double dt, Pair_* cmd) {
         }
     }
 
+    if (to_remove.size() == 1 && mode == Menu::MainChoice::NETWORK) { // If a collision happened, do this in network mode
+        werase(app.getWindow());
+        app.print_centered(app.getWindow(), blackboard.getPlayAreaSize().second/2, 
+                            "---||| Collision detected! - Game Over - Thank you for playing! |||---", COLOR_PAIR(3) | A_BOLD);
+        wrefresh(app.getWindow()); 
+        std::this_thread::sleep_for(std::chrono::milliseconds(3000));
+        Pipe<char> gameloop_pipe_wd(GAMELOOP_PIPE_WD);
+        gameloop_pipe_wd.send_data('Q'); // send quit signal
+    }
+
     // -------------------------
     // Remove inactive objects safely
     // -------------------------
@@ -297,7 +339,7 @@ void Update(double dt, Pair_* cmd) {
     }
 
     // Signal spawn permission to other processes
-    blackboard.signalSpawnPermission();
+    blackboard.signalPermission();
 }
 
 // -------------------- Rendering --------------------
@@ -337,6 +379,6 @@ void write_item_info_to_file(const std::string& filename, BlackBoard& BB, int fp
         file << "---------------------------------\n\n";
     }
 
-    file << "FPS: " << fps << "   UPS: " << ups << "   alpha=" << alpha << "\n\n";
+    file << "FPS: " << fps << "   UPS: " << ups << "   Game_mode: " << (static_cast<int>(blackboard.getGameMode()) == 1 ? "Network" : "Standalone") << "\n\n";
     file.close();
 }

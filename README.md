@@ -1,7 +1,6 @@
 # drone-simulation
 
 ## Overview
-**>------------ This project is under development ------------<**
 
 This project is an interactive drone simulation that operates in a terminal-based environment using `ncurses`. The simulation consists of:
 
@@ -15,6 +14,7 @@ It can be used for **simple path-planning** of drones with respect to avoidable 
 - **Speed Adjustment**: Pressing the same movement key or holding it repeatedly increases the drone's force, leading to acceleration.
 - **Multi-process Architecture**: A master process forks and runs other processes.
 - **Shared Memory & IPC**: Uses shared memory structs for inter-process communication and pipes for reading keyboard data.
+- **Network Communication:** Uses TCP sockets for reliable client-server communication, sending and receiving drone and obstacle positions in real time.
 
 
 ```
@@ -65,11 +65,15 @@ How it works:
    - Allow sending commands (keyboard input, triggers) between processes.
    - Processes act on shared ItemData and update their logic objects.
 
-
 ## Project Structure
 ```
 .
 ├── CMakeLists.txt
+├── images
+│   ├── Formulas.png
+│   ├── LogLevels.png
+│   ├── LogPic.png
+│   └── snap_shot.png
 ├── include
 │   ├── communication
 │   │   ├── BlackBoard.h
@@ -120,10 +124,12 @@ How it works:
     │   ├── ItemSpawner_Proc.cpp
     │   ├── KeyBoard_Proc.cpp
     │   ├── Master_Proc.cpp
+    │   ├── NetworkGate_Proc.cpp
     │   ├── Temp_Proc.cpp
     │   └── WatchDog_Proc.cpp
     └── windowing
         └── Ncurses_Win.cpp
+
 
 ``` 
 
@@ -162,6 +168,52 @@ There are four different log levels:
 
 ![alt text](images/LogLevels.png)
 
+
+## Network Communication Overview
+
+**Notes:**
+- All positions are optionally **flipped** to match server/client views.
+- Positions are **scaled** to the local play area window size.
+- The drone/obstacle update loop continues until a shutdown signal is received.
+
+#### Sequence Diagram (Mermaid)
+
+```
+sequenceDiagram
+    participant S as Server
+    participant C as Client
+
+    %% Phase 1: Handshake
+    Note over S,C: 🟦 Handshake phase
+    C->>S: TCP connect
+    S-->>C: "ok"
+    C-->>S: "ook"
+
+    %% Phase 2: Window Setup
+    Note over S,C: 🟨 Window dimensions setup
+    S-->>C: "size WIDTH,HEIGHT"
+    C-->>S: "sok"
+
+    %% Phase 3: Game Loop
+    Note over S,C: 🟩 Game loop (runs until shutdown)
+    loop Game Loop
+        alt Normal iteration
+            S-->>C: "drone"
+            S-->>C: server_drone_position
+            C-->>S: "dok"
+
+            S-->>C: "obst"
+            C-->>S: client_drone_position
+            S-->>C: "pok"
+        else Shutdown triggered
+            Note over S,C: 🟥 Shutdown sequence
+            S-->>C: "q"
+            C-->>S: "qok"
+        end
+    end
+
+````
+
 ## How to Build and Run
 #### Dependencies
 - `Konsole` for terminal 
@@ -194,7 +246,7 @@ cd processes
 ## Description of Components 
 #### Master Process
 
-The Master Process is responsible for launching and managing child processes `(e.g., GlobalTimer, Keyboard, GameLoop, ItemSpawner, Watchdog)` using `fork() and execlp()`. 
+The Master Process is responsible for launching and managing child processes `(e.g., GlobalTimer, Keyboard, GameLoop, ItemSpawner, Watchdog , NetworkGate)` using `fork() and execlp()`. 
 It sets up inter-process communication through pipes, logs the processes' statuses, and sends heartbeat signals to the Watchdog. It monitors the status of child processes 
 and ensures proper cleanup and shutdown in case of failure.
 
@@ -221,5 +273,13 @@ It also handles object spawning, updates, and removals based on game logic.
 #### Keyboard Process
 The Keyboard process captures user input via the keyboard and sends movement commands to the GameLoop (via pipe). It uses ncurses for non-blocking key presses, 
 handling movement with keys like WASD, arrow keys, and diagonals (Q, E, Z, C). The X key is used to reset the Force (thrust) to zero, effectively stopping the drone's movement.
+
+#### NetworkGate Process 
+The NetworkGate process handles network communication between two game instances. It can run in **Server** or **Client** mode, selectable from the menu.  
+
+- **Server mode:** Accepts a client connection, performs a handshake, continuously sends the server drone’s position, and receives the client drone’s position.  
+- **Client mode:** Connects to the server, performs the handshake, receives the server drone’s position, and sends the client drone’s position.
+
+It uses **TCP** for reliable communication, acknowledges received messages, and handles shutdown signals to terminate gracefully.
 
 ---

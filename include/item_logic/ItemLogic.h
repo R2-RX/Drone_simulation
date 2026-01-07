@@ -41,8 +41,6 @@ public:
     // Reset all item data to default
     void reset();
 
-    ItemData* get_data_ptr() const { return data; }
-
     std::mutex& get_mutex() const { return data_mutex; }
 
     void deactivate() { data->active = false; }

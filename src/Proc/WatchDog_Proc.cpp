@@ -42,84 +42,132 @@ int main() {
     Pipe<char> itemspawner_pipe(ITEMSPAWNER_PIPE_WD);
     Pipe<char> master_pipe(MASTER_PIPE_WD);
     Pipe<char> global_timer_pipe(GLOBALTIMER_PIPE_WD);
+    Pipe<char> networkgate_pipe(NETWORKGATE_PIPE_WD);
+
 
     // Build list of watched processes
-    std::vector<WatchedProcess> procs = {
-        {'T', "GlobalTimer", blackboard.getProcessPid(WatchDogProcName::GlobalTimer_Proc), &global_timer_pipe, create_timerfd()},
-        {'K', "Keyboard",    blackboard.getProcessPid(WatchDogProcName::Keyboard_Proc),    &keyboard_pipe,    create_timerfd()},
-        {'G', "GameLoop",    blackboard.getProcessPid(WatchDogProcName::GameLoop_Proc),    &gameloop_pipe,    create_timerfd()},
-        {'S', "ItemSpawner", blackboard.getProcessPid(WatchDogProcName::ItemSpawner_Proc), &itemspawner_pipe, create_timerfd()},
-        {'M', "Master",      blackboard.getProcessPid(WatchDogProcName::Master_Proc),      &master_pipe,      create_timerfd()}
-    };
-
-    // Initialize all timers
-    for (auto& p : procs) reset_timer(p.timer_fd);
-
-    // Build pollfd table
-    // struct pollfd {
-    //     int fd;        // The file descriptor to monitor
-    //     short events;  // The events you're interested in (e.g., POLLIN, POLLOUT)
-    //     short revents; // The events that actually occurred
-    // };
-    std::vector<pollfd> fds;
-    for (auto& p : procs) {
-        fds.push_back({ p.pipe->get_fd(),  POLLIN, 0 });
-        fds.push_back({ p.timer_fd,        POLLIN, 0 });
+    std::vector<WatchedProcess> procs;
+    Menu::MainChoice mode = blackboard.getGameMode();
+    if (mode == Menu::MainChoice::STANDALONE) {
+        procs = {
+            {'T', "GlobalTimer", blackboard.getProcessPid(WatchDogProcName::GlobalTimer_Proc), &global_timer_pipe, create_timerfd()},
+            {'K', "Keyboard",    blackboard.getProcessPid(WatchDogProcName::Keyboard_Proc),    &keyboard_pipe,    create_timerfd()},
+            {'G', "GameLoop",    blackboard.getProcessPid(WatchDogProcName::GameLoop_Proc),    &gameloop_pipe,    create_timerfd()},
+            {'S', "ItemSpawner", blackboard.getProcessPid(WatchDogProcName::ItemSpawner_Proc), &itemspawner_pipe, create_timerfd()},
+            {'M', "Master",      blackboard.getProcessPid(WatchDogProcName::Master_Proc),      &master_pipe,      create_timerfd()}
+        };
+    } else if (mode == Menu::MainChoice::NETWORK) {
+        procs = {
+            {' ', "GlobalTimer", blackboard.getProcessPid(WatchDogProcName::GlobalTimer_Proc), &global_timer_pipe, 0},
+            {' ', "Keyboard",    blackboard.getProcessPid(WatchDogProcName::Keyboard_Proc),    &keyboard_pipe,    0},
+            {' ', "GameLoop",    blackboard.getProcessPid(WatchDogProcName::GameLoop_Proc),    &gameloop_pipe,    0},
+            {' ', "NetworkGate", blackboard.getProcessPid(WatchDogProcName::NetworkGate_Proc), &networkgate_pipe, 0},
+            {' ', "Master",      blackboard.getProcessPid(WatchDogProcName::Master_Proc),      &master_pipe,      0}
+        };
     }
 
-    // Log all running processes
-    for (auto& p : procs) logger.log(p.name + " is running...", p.pid, Logger::LogLevel::INFO);
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    logger.log("Watchdog is monitoring all processes.", getpid(), Logger::LogLevel::INFO);
+    if (mode == Menu::MainChoice::STANDALONE) {
+        logger.log("WatchDog running in STANDALONE mode.", getpid(),
+            Logger::LogLevel::INFO);
+        // Initialize all timers
+        for (auto& p : procs) reset_timer(p.timer_fd);
 
-    while (true) {
-        int ret = poll(fds.data(), fds.size(), -1);
-        if (ret < 0) {
-            if (errno == EINTR) continue;
-            throw std::runtime_error("poll failed");
+        // Build pollfd table
+        // struct pollfd {
+        //     int fd;        // The file descriptor to monitor
+        //     short events;  // The events you're interested in (e.g., POLLIN, POLLOUT)
+        //     short revents; // The events that actually occurred
+        // };
+        std::vector<pollfd> fds;
+        for (auto& p : procs) {
+            fds.push_back({ p.pipe->get_fd(),  POLLIN, 0 });
+            fds.push_back({ p.timer_fd,        POLLIN, 0 });
         }
 
-        for (size_t i = 0; i < procs.size(); ++i) {
-            auto& p = procs[i];
-            pollfd& pipefd  = fds[2*i];
-            pollfd& timerfd = fds[2*i+1];
+        // Log all running processes
+        for (auto& p : procs) logger.log(p.name + " is running...", p.pid, Logger::LogLevel::INFO);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        logger.log("Watchdog is monitoring all processes.", getpid(), Logger::LogLevel::INFO);
 
-            // ----------------- PIPE HEARTBEAT -----------------
-            if (pipefd.revents & POLLIN) {
-                char* msg = p.pipe->receive_data();
-                if (msg) {
-                    if (*msg == p.id) {
-                        heartbeat_received(p, logger);
-                    } else if (*msg == 'Q') {
-                        logger.log("'Q' received from: " + p.name, p.pid, Logger::LogLevel::WARNING);
-                        shutdown_all_processes(procs, blackboard, logger);
-                        return EXIT_SUCCESS;
+        while (true) {
+            int ret = poll(fds.data(), fds.size(), -1);
+            if (ret < 0) {
+                if (errno == EINTR) continue;
+                throw std::runtime_error("poll failed");
+            }
+
+            for (size_t i = 0; i < procs.size(); ++i) {
+                auto& p = procs[i];
+                pollfd& pipefd  = fds[2*i];
+                pollfd& timerfd = fds[2*i+1];
+
+                // ----------------- PIPE HEARTBEAT -----------------
+                if (pipefd.revents & POLLIN) {
+                    char* msg = p.pipe->receive_data();
+                    if (msg) {
+                        if (*msg == p.id) {
+                            heartbeat_received(p, logger);
+                        } else if (*msg == 'Q') {
+                            logger.log("'Q' received from: " + p.name, p.pid, Logger::LogLevel::LOG);
+                            shutdown_all_processes(procs, blackboard, logger);
+                            return EXIT_SUCCESS;
+                        } else {
+                            logger.log("Unexpected message from " + p.name + ": " + *msg, p.pid, Logger::LogLevel::WARNING);
+                        }
                     } else {
-                        logger.log("Unexpected message from " + p.name + ": " + *msg, p.pid, Logger::LogLevel::WARNING);
+                        logger.log("No heartbeat received yet from " + p.name, p.pid, Logger::LogLevel::LOG);
                     }
-                } else {
-                    logger.log("No heartbeat received yet from " + p.name, p.pid, Logger::LogLevel::LOG);
+                }
+
+                // ----------------- TIMER EXPIRED -----------------
+                if (timerfd.revents & POLLIN) {
+                    logger.log("Timeout detected: " + p.name, p.pid, Logger::LogLevel::ERROR);
+                    shutdown_all_processes(procs, blackboard, logger);
+                    return EXIT_FAILURE;
                 }
             }
 
-            // ----------------- TIMER EXPIRED -----------------
-            if (timerfd.revents & POLLIN) {
-                logger.log("Timeout detected: " + p.name, p.pid, Logger::LogLevel::ERROR);
+            if (shutdownFlage) { // check the flag
+                logger.log("Received SIGINT (Ctrl+C). Shutting down...", getpid(), Logger::LogLevel::WARNING);
                 shutdown_all_processes(procs, blackboard, logger);
-                return EXIT_FAILURE;
+                return EXIT_SUCCESS;
             }
+
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    } else if(mode == Menu::MainChoice::NETWORK) {
+        logger.log("WatchDog running in NETWORK mode.(no heartbeat monitoring)",
+            getpid(),
+            Logger::LogLevel::INFO);
+                      
+        while (true) {
+
+            for (size_t i = 0; i < procs.size(); ++i) {
+                auto& p = procs[i];
+
+                // ----------------- PIPES -----------------
+                    char* msg = p.pipe->receive_data();
+                    if (msg) {
+                        if (*msg == 'Q') {
+                            logger.log("'Q' received from: " + p.name, p.pid, Logger::LogLevel::LOG);
+                            shutdown_all_processes(procs, blackboard, logger);
+                            return EXIT_SUCCESS;
+                        } 
+                    }
+                }
+
+            if (shutdownFlage) { // check the flag
+                logger.log("Received SIGINT (Ctrl+C). Shutting down...", getpid(), Logger::LogLevel::WARNING);
+                shutdown_all_processes(procs, blackboard, logger);
+                return EXIT_SUCCESS;
+            }
+
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
-        if (shutdownFlage) { // check the flag
-            logger.log("Received SIGINT (Ctrl+C). Shutting down...", getpid(), Logger::LogLevel::WARNING);
-            shutdown_all_processes(procs, blackboard, logger);
-            return EXIT_SUCCESS;
-        }
-
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-
     return EXIT_SUCCESS;
 }
 
@@ -152,7 +200,6 @@ void shutdown_all_processes(const std::vector<WatchedProcess>& procs, BlackBoard
     }
 
     // Clean up shared resources
-    blackboard.clean_up();
     general_cleanUp();
 
     logger.log("All processes terminated by Watchdog", getpid(), Logger::LogLevel::INFO);
@@ -175,11 +222,13 @@ void reset_timer(int fd) {
 
 void general_cleanUp() {
     shm_unlink(SHM_NAME);   
-    sem_unlink(SPAWN_SEM_NAME);  
+    sem_unlink(BLACKBOARD_SHM_SEM);
+    sem_unlink(SYNC_SEM);  
     unlink(KEYBOARD_Data_PIPE);
     unlink(GLOBALTIMER_PIPE_WD);
     unlink(GAMELOOP_PIPE_WD);
     unlink(MASTER_PIPE_WD);
     unlink(KEYBOARD_PIPE_WD);
     unlink(ITEMSPAWNER_PIPE_WD);
+    unlink(NETWORKGATE_PIPE_WD);
 }

@@ -10,8 +10,8 @@ BlackBoard::BlackBoard(const std::string& shm_name)
         freeLogicSlots.push_back(i);
 
     // Initialize named semaphore for spawn control
-    spawnSemaphore = sem_open("/spawn_semaphore", O_CREAT, 0666, 0); // initial value 0
-    if (spawnSemaphore == SEM_FAILED) {
+    syncSemaphore = sem_open(SYNC_SEM, O_CREAT, 0666, 0); // initial value 0
+    if (syncSemaphore == SEM_FAILED) {
         throw std::runtime_error("Failed to open spawn semaphore: " + std::string(strerror(errno)));
     }
 }
@@ -20,12 +20,10 @@ BlackBoard::~BlackBoard() {
     for (int i = 0; i < MAX_LOGIC_OBJECTS; ++i)
         delete logicPool[i];
     
-    if (spawnSemaphore) {
-        sem_close(spawnSemaphore);   // close handle
-        sem_unlink("/spawn_semaphore"); // remove from system
+    if (syncSemaphore) {
+        sem_close(syncSemaphore);
+        syncSemaphore = nullptr;
     }
-
-    shm_data.clean_up();
 }
 
 // -------- Logic Management --------
@@ -168,18 +166,18 @@ std::pair<int,int> BlackBoard::getPlayAreaSize() {
 }
 
 // wait for spawn permission
-void BlackBoard::waitSpawnPermission() {
-    if (spawnSemaphore) {
-        if (sem_wait(spawnSemaphore) == -1) {
+void BlackBoard::waitForPermission() {
+    if (syncSemaphore) {
+        if (sem_wait(syncSemaphore) == -1) {
             perror("sem_wait failed");
         }
     }
 }
 
 // signal permission granted
-void BlackBoard::signalSpawnPermission() {
-    if (spawnSemaphore) {
-        if (sem_post(spawnSemaphore) == -1) {
+void BlackBoard::signalPermission() {
+    if (syncSemaphore) {
+        if (sem_post(syncSemaphore) == -1) {
             perror("sem_post failed");
         }
     }
@@ -224,4 +222,60 @@ double BlackBoard::getTimeStamp() {
         T = data->g_timeStamp;
     });
     return T;
+}
+
+void BlackBoard::setGameMode(Menu::MainChoice choice) {
+    shm_data.with_lock([&](BlackBoardShared* data) {
+        data->Game_mode = static_cast<int>(choice);
+    });
+}
+
+Menu::MainChoice BlackBoard::getGameMode() {
+    Menu::MainChoice choice;
+    shm_data.with_lock([&](BlackBoardShared* data) {
+        choice = static_cast<Menu::MainChoice>(data->Game_mode);
+    });
+    return choice;
+}
+
+void BlackBoard::setNetworkSide(Menu::NetworkChoice choice) {
+    shm_data.with_lock([&](BlackBoardShared* data) {
+        data->Network_side = static_cast<int>(choice);
+    });
+}
+
+Menu::NetworkChoice BlackBoard::getNetworkSide() {
+    Menu::NetworkChoice choice;
+    shm_data.with_lock([&](BlackBoardShared* data) {
+        choice = static_cast<Menu::NetworkChoice>(data->Network_side);
+    });
+    return choice;
+}
+
+void BlackBoard::setIP(const std::string& ip) {
+    shm_data.with_lock([&](BlackBoardShared* data) {
+        std::snprintf(data->IP, sizeof(data->IP), "%s", ip.c_str());
+    });
+}
+
+std::string BlackBoard::getIP() {
+    std::string ip;
+    shm_data.with_lock([&](BlackBoardShared* data) {
+        ip = data->IP;  // char* → std::string
+    });
+    return ip;
+}
+
+void BlackBoard::setPort(const std::string& port) {
+    shm_data.with_lock([&](BlackBoardShared* data) {
+        std::snprintf(data->Port, sizeof(data->Port), "%s", port.c_str());
+    });
+}
+
+std::string BlackBoard::getPort() {
+    std::string port;
+    shm_data.with_lock([&](BlackBoardShared* data) {
+        port = data->Port;
+    });
+    return port;
 }

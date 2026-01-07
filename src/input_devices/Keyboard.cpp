@@ -16,7 +16,7 @@ Keyboard::Keyboard()
     last_Force_command_ = {0.0, 0.0};
 }
 
-Pair_ Keyboard::readInput(int ch)
+Point Keyboard::readInput(int ch)
 {
     // Debug ncurses
     //mvprintw(1, 12, "Key code: %d   ", ch);
@@ -26,16 +26,16 @@ Pair_ Keyboard::readInput(int ch)
          return last_Force_command_;      // keep previous direction
 
     switch (ch) {
-        case 'w': case KEY_UP:    return { 0.0, -1.0 - DRONE_NON_PHYSICAL_FORCE };
-        case 's': case KEY_DOWN:  return { 0.0,  1.0 + DRONE_NON_PHYSICAL_FORCE};
-        case 'a': case KEY_LEFT:  return {-1.0 - DRONE_NON_PHYSICAL_FORCE,  0.0 };
-        case 'd': case KEY_RIGHT: return { 1.0 + DRONE_NON_PHYSICAL_FORCE,  0.0 };
+        case 'w': case KEY_UP:    return { 0.0, -1.0 - DRONE_ASSIST_FORCE };
+        case 's': case KEY_DOWN:  return { 0.0,  1.0 + DRONE_ASSIST_FORCE};
+        case 'a': case KEY_LEFT:  return {-1.0 - DRONE_ASSIST_FORCE,  0.0 };
+        case 'd': case KEY_RIGHT: return { 1.0 + DRONE_ASSIST_FORCE,  0.0 };
 
         // diagonal movement
-        case 'q': return {-1.0 - DRONE_NON_PHYSICAL_FORCE, -1.0 - DRONE_NON_PHYSICAL_FORCE};
-        case 'e': return { 1.0 + DRONE_NON_PHYSICAL_FORCE, -1.0 - DRONE_NON_PHYSICAL_FORCE};
-        case 'z': return {-1.0 - DRONE_NON_PHYSICAL_FORCE,  1.0 + DRONE_NON_PHYSICAL_FORCE};
-        case 'c': return { 1.0 + DRONE_NON_PHYSICAL_FORCE,  1.0 + DRONE_NON_PHYSICAL_FORCE};
+        case 'q': return {-1.0 - DRONE_ASSIST_FORCE, -1.0 - DRONE_ASSIST_FORCE};
+        case 'e': return { 1.0 + DRONE_ASSIST_FORCE, -1.0 - DRONE_ASSIST_FORCE};
+        case 'z': return {-1.0 - DRONE_ASSIST_FORCE,  1.0 + DRONE_ASSIST_FORCE};
+        case 'c': return { 1.0 + DRONE_ASSIST_FORCE,  1.0 + DRONE_ASSIST_FORCE};
 
         case 'x': return { 0.0,  0.0 }; // no thrust, forces set to zero
     }
@@ -51,13 +51,13 @@ void Keyboard::update(int ch)
     // mvprintw(1, 0, "Command: %.1f , %.1f   ",
     //          last_Force_command_.x,
     //          last_Force_command_.y);
-    Pipe<Pair_> Pipe_(KEYBOARD_Data_PIPE);
+    Pipe<Point> Pipe_(KEYBOARD_Data_PIPE);
     Pipe_.send_data(last_Force_command_);
     //refresh();
 }
 
 // --- Getter ---
-Pair_ Keyboard::getCommand() const
+Point Keyboard::getCommand() const
 {
     return last_Force_command_;
 }

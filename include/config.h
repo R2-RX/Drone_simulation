@@ -16,10 +16,11 @@
 #define SHM_NAME "/blackboard_shm"
 
 // Semaphore
-#define SPAWN_SEM_NAME "/spawn_semaphore"
+#define BLACKBOARD_SHM_SEM "/blackboard_shm_sem"
+#define SYNC_SEM "/syncSemaphore"
 
 // Number of processes
-#define NUM_PROCESSES 6
+#define NUM_PROCESSES 7
 
 // Data pipe line
 #define KEYBOARD_Data_PIPE  "/tmp/keyboard_data_pipe"
@@ -37,6 +38,7 @@
 #define GLOBALTIMER_PIPE_WD     "/tmp/globaltimer_pipe_wd"
 #define GAMELOOP_PIPE_WD        "/tmp/gameloop_pipe_wd"
 #define MASTER_PIPE_WD          "/tmp/master_pipe_wd"
+#define NETWORKGATE_PIPE_WD    "/tmp/master_pipe_net"
 #define KEYBOARD_PIPE_WD        "/tmp/keyboard_pipe_wd"
 #define ITEMSPAWNER_PIPE_WD     "/tmp/itemspawner_pipe_wd"
 
@@ -47,15 +49,39 @@
 
 // Object Coefficents (T and O)
 #define  ATTRACTION_COEFFICIENT 20
-#define  REPULSIVE_COEFFICIENT 30
+#define  REPULSIVE_COEFFICIENT 50
 
 // File
 #define LIVE_MONITORING  "live_monitoring.txt"
 #define SYSTEM_WIDE_LOG  "system_wide.log"
 //#define Save_GAME_DATA  "game_data.dat"
 
+// Tuning hyperparameters
 #define DRONE_MASS 10
-#define DRONE_NON_PHYSICAL_FORCE (DRONE_MASS * 3) // for real simulation set it to zero
-#define DRONE_FRICTION_FACTOR (DRONE_MASS * 2)  //  for real simulation set it to proper number 
+#define DRONE_ASSIST_FORCE (DRONE_MASS * 3) // Artificial force to stabilize the drone in simulation; set to 0 for real physics
+#define DRONE_FRICTION_FACTOR (DRONE_MASS * 2)  // Simulation-only friction; use measured value for real drone
+
+
+// Network
+#define NETWORK_PORT "5050"
+
+
+#include <cmath>  // for M_PI
+
+// Define rotation angles in radians
+#define ALPHA_0           0.0
+#define ALPHA_PI_2        (M_PI / 2.0)     // +90°
+#define ALPHA_MINUS_PI_2  (-M_PI / 2.0)    // -90°
+#define ALPHA_PI          M_PI             // 180°
+#define ALPHA_MINUS_PI    (-M_PI)          // -180° (same as 180°)
+
+// Macro to convert radians to degrees
+#define RAD_TO_DEG(rad)   ((rad) * 180.0 / M_PI)
+
+#define Genetic_ALPHA ALPHA_0 //Choosing a “current” rotation angle ( sin() and cos() in C++ take radians)
+
+// Example:
+//  Genetic_Alpha  ALPHA_0         // 90° in radians
+//  Genetic_Alpha  RAD_TO_DEG(ALPHA_0); // 90° in degrees
 
 #endif // CONFIG_H

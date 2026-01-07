@@ -52,6 +52,7 @@ target_link_libraries(DroneProject_lib ${NCURSES_LIBRARIES} pthread)
 
 set(PROC_SOURCES
     src/Proc/Temp_Proc.cpp
+    src/Proc/NetworkGate_Proc.cpp
     src/Proc/GameLoop_Proc.cpp
     src/Proc/ItemSpawner_Proc.cpp
     src/Proc/KeyBoard_Proc.cpp

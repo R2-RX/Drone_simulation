@@ -10,15 +10,16 @@
 #include "Logger.h"
 
 Logger logger(SYSTEM_WIDE_LOG);
-static volatile bool shutdownFlage = false;
+static volatile bool shutdownFlag = false;
 
 void draw_tail_output(WINDOW* win);
 void print_center(WINDOW* win, int row, const char* str);
 void draw_keys(WINDOW* win);
-void handle_sigterm(int signum) {shutdownFlage = true;}
+void handle_sigterm(int signum) {shutdownFlag = true;}
 
 int main() {
     signal(SIGTERM, handle_sigterm); // from watchdog
+    signal(SIGINT, handle_sigterm); // Ctrl+C
 
     setlocale(LC_ALL, "");
 
@@ -46,7 +47,7 @@ int main() {
             keyboard_pipe_wd.send_data('Q');  // send quit signal
             break;  // ESC to exit
         } 
-        if (shutdownFlage) {
+        if (shutdownFlag) {
             logger.log("Received SIGTERM, shutting down...", getpid(),Logger::LogLevel::WARNING);
             break; 
         }

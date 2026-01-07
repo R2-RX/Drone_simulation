@@ -14,12 +14,12 @@ public:
     Keyboard& operator=(const Keyboard&) = delete;
 
     void update(int ch);                                      // should be called every loop
-    Pair_ getCommand() const;        // std::pair<double, double> 
+    Point getCommand() const;        // std::pair<double, double> 
 
 private:
-    Pair_ readInput(int ch);              
+    Point readInput(int ch);              
 
-    Pair_ last_Force_command_ {0.0, 0.0};
+    Point last_Force_command_ {0.0, 0.0};
 };
 
 #endif 

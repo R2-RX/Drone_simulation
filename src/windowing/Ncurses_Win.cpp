@@ -25,8 +25,16 @@ Ncurses_Win::Ncurses_Win()
 }
 
 Ncurses_Win::~Ncurses_Win() {
-    if (win) delwin(win);
-    endwin();
+    // delete the window if it exists
+    if (win) {
+        delwin(win);
+        win = nullptr;
+    }
+
+    // safely end ncurses mode (only once)
+    if (isendwin() == FALSE) {
+        endwin();
+    }
 }
 
 void Ncurses_Win::updateDimensions() {
@@ -100,7 +108,7 @@ void Ncurses_Win::drawAll(Space2D&, WINDOW* win, BlackBoard& BB, double scale) {
 
         // Prevent out-of-bounds crashes
         if (sy >= 0 && sy < h && sx >= 0 && sx < w) {
-            switch (logic->get_data_ptr()->type) {
+            switch (logic->getItemData()->type) {
                 case ItemData::ItemType::Target:
                     // Apply red color for Target
                     wattron(win, COLOR_PAIR(3));
@@ -139,4 +147,24 @@ void Ncurses_Win::setup_colors() {
     init_pair(6, COLOR_CYAN,    COLOR_BLACK);
     init_pair(7, COLOR_WHITE,   COLOR_BLACK);
 
+}
+
+void Ncurses_Win::print_centered(WINDOW* win, int row, const char* str, attr_t attr) {
+    
+    int width = getmaxx(win);
+    int col = (width - strlen(str)) / 2;
+    wattron(win, attr);
+    mvwprintw(win, row, col, "%s", str);
+    wattroff(win, attr);
+}
+
+void Ncurses_Win::destroy() {
+    if (win) {
+        delwin(win);
+        win = nullptr;
+    }
+
+    if (isendwin() == FALSE) {
+        endwin();
+    }
 }

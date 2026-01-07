@@ -8,6 +8,7 @@
 #include "Space2DLogic.h"
 #include "BlackBoard.h"
 
+#define COLOR_ATTR(pair, attr) (COLOR_PAIR(pair) | (attr))
 class Ncurses_Win {
 protected:
     int H, W;      // Terminal height/width
@@ -27,6 +28,8 @@ public:
 
     void drawAll(Space2D& space, WINDOW* win, BlackBoard& BB, double scale);
     void setup_colors();
+    void print_centered(WINDOW* win, int row, const char* str, attr_t attr = COLOR_PAIR(2));
+    void destroy();
 
     WINDOW* getWindow() const { return win; }
 };

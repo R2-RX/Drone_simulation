@@ -30,6 +30,7 @@ public:
     double getFy() const { return data->Force_y; }
     
     void resetForces();
+    void resetVelocity();
     void apply_thrust(double fx, double fy);
     void computeRepulsiveForce(const std::vector<ItemData*>& obstacles, double rho0);
     void computeAttractiveForce(const ItemData& target);

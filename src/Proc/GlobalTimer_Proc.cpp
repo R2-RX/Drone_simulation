@@ -12,7 +12,7 @@
 Logger logger(SYSTEM_WIDE_LOG);
 BlackBoard blackboard;
 
-static volatile bool shutdownFlage = false; // plain bool
+static volatile bool shutdownFlag = false; // plain bool
 
 // ---------------------- Signal Handlers ----------------------
 
@@ -26,7 +26,7 @@ void timer_handler(int /*signum*/) {
 
 // SIGTERM handler
 void handle_sigterm(int /*signum*/) {
-    shutdownFlage = true;
+    shutdownFlag = true;
 }
 
 // ------------------------- Main -------------------------
@@ -78,7 +78,7 @@ int main() {
 
         // ------------------ Main loop ------------------
         const int HEARTBEAT_MS = 10; // send heartbeat every 10 ms
-        while (!shutdownFlage) {
+        while (!shutdownFlag) {
             globaltimer_pipe_wd.send_data('T');
 
             // Sleep until next heartbeat or signal
